@@ -59,11 +59,41 @@ class AWI:
 
     def _build(self, batch_size):
         self.encoder_cell = self.stacked_rnn()
+        self.encoder_state = self.init_state(self.encoder_cell)
         self.intention_cell = self.stacked_rnn()
+        self.intention_state = self.init_state(self.intention_cell)
         self.decoder_inputs = self.stacked_rnn()
+        self.decoder_state = self.init_state(self.decoder_cell)
 
-    def run_step(self, encoder_inputs, decoder_inputs):
+
+    def _run_step(self, encoder_inputs, decoder_inputs):
+        ## encoder_cell input
+        output, state = self.encoder_cell(encoder_inputs, self.encoder_state)
+        self.encoder_state = state
+        
         pass
+
+    def _inference(self):
+        print('Create inference')
+        # If we use sampled softmax, we need an output projection.
+        # Sampled softmax only makes sense if we sample less than vocabulary size.
+        if config.NUM_SAMPLES > 0 and config.NUM_SAMPLES < config.DEC_VOCAB:
+            w = tf.get_variable('proj_w', [config.HIDDEN_SIZE, config.DEC_VOCAB])
+            b = tf.get_variable('proj_b', [config.DEC_VOCAB])
+            self.output_projection = (w, b)
+
+        def sampled_loss(labels, inputs):
+            labels = tf.reshape(labels, [-1, 1])
+            local_w_t = tf.cast(w, tf.float32)
+            local_b = tf.cast(b, tf.float32)
+            local_inputs = tf.cast(inputs, tf.float32)
+            return tf.nn.sampled_softmax_loss(weights=tf.transpose(local_w_t),
+                                              biases=local_b,
+                                              labels=labels,
+                                              inputs=local_inputs,
+                                              num_sampled=config.NUM_SAMPLES,
+                                              num_classes=config.DEC_VOCAB)
+        self.softmax_loss_function = sampled_loss
 
     def chat(self):
         pass
