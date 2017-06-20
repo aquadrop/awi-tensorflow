@@ -27,7 +27,7 @@ import inspect
 import numpy as np
 import tensorflow as tf
 
-batch_size = 2
+batch_size = 64
 
 EOS = 6
 VOL_SIZE = 7
@@ -123,8 +123,9 @@ def train():
     #
     predictions = logits_series
     # #
-    # loss = tf.reduce_mean(tf.square(tf.subtract(decoder_inputs, predictions)))
-    # train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
+    f_decoder_inputs = tf.cast(decoder_inputs, dtype=tf.float32)
+    loss = tf.reduce_mean(tf.square(tf.subtract(f_decoder_inputs, predictions)))
+    train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
         # with tf.variable_scope('decoder') as scope:
         #     decoder_inputs = tf.placeholder(tf.float32, shape=[None, 1], name="decoder")
         #     decoder_cell = stacked_rnn(32)
@@ -148,13 +149,13 @@ def train():
         sess.run(tf.global_variables_initializer())
         i = 0
         for e_inputs, d_inputs in gen:
-            # train_step.run(feed_dict={encoder_inputs: e_inputs, decoder_inputs: d_inputs})
-            # if (i + 1) % 10 == 0:
-            #     print(sess.run(loss, feed_dict={encoder_inputs: e_inputs, decoder_inputs:d_inputs}))
-            #     save_path = saver.save(sess, "../model/model.ckpt")
-            #     print("Model saved in file: %s" % save_path)
-            # i = i + 1
-            print(sess.run(encoder_output, feed_dict={encoder_inputs:e_inputs, decoder_inputs:d_inputs}))
+            train_step.run(feed_dict={encoder_inputs: e_inputs, decoder_inputs: d_inputs})
+            if (i + 1) % 10 == 0:
+                print(sess.run(loss, feed_dict={encoder_inputs: e_inputs, decoder_inputs:d_inputs}))
+                save_path = saver.save(sess, "../model/model.ckpt")
+                print(sess.run(loss, feed_dict={encoder_inputs: e_inputs, decoder_inputs: d_inputs}))
+            i = i + 1
+
 
 def rnn_plus():
     return 0
