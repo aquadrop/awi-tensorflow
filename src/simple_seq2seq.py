@@ -27,7 +27,7 @@ import inspect
 import numpy as np
 import tensorflow as tf
 
-batch_size = 2
+batch_size = 64
 
 EOS = np.zeros(10, dtype=np.float)
 

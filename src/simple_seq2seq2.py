@@ -29,7 +29,13 @@ import tensorflow as tf
 
 batch_size = 2
 
-EOS = np.zeros(10, dtype=np.float)
+EOS = 6
+VOL_SIZE = 7
+EMBEDDING_SIZE = 10
+ENCODER_SEQ_LENGTH = 2
+ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
+DECODER_SEQ_LENGTH = 1
+DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
 
 def random_one_hot_triple():
     zeros_a = np.zeros(10, dtype=np.float32)
@@ -63,7 +69,7 @@ def plus_op_data():
             encoder_inputs.append([a, b])
             decoder_inputs.append([c])
 
-        yield np.asarray(encoder_inputs, dtype=np.float32).reshape(batch_size, 2), np.asarray(decoder_inputs, dtype=np.float32).reshape((batch_size, 1))
+        yield np.asarray(encoder_inputs, dtype=np.int32).reshape(batch_size, 2), np.asarray(decoder_inputs, dtype=np.int32).reshape((batch_size, 1))
 
 def single_cell(size=128):
     if 'reuse' in inspect.getargspec(
@@ -92,26 +98,33 @@ def init_state(cell, batch_size):
     return cell.zero_state(batch_size=batch_size, dtype=tf.float32)
 
 def train():
-    step = 0
 
-    encoder_inputs = tf.placeholder(tf.float32, shape=(batch_size, 2), name="encoder_inputs")
-    decoder_inputs = tf.placeholder(tf.float32, shape=(batch_size, 1), name="decoder_inputs")
+    embedding = tf.get_variable(
+        "embedding", [VOL_SIZE, EMBEDDING_SIZE], dtype=tf.float32)
+
+    encoder_inputs = tf.placeholder(tf.int32, shape=(batch_size, 2), name="encoder_inputs")
+    decoder_inputs = tf.placeholder(tf.int32, shape=(batch_size, 1), name="decoder_inputs")
+
+    encoder_embedding_vectors = tf.nn.embedding_lookup(embedding, encoder_inputs)
+    decoder_embedding_vectors = tf.nn.embedding_lookup(embedding, decoder_inputs)
 
     encoder_cell = stacked_rnn(32)
-    if step == 0:
-        encoder_state = init_state(encoder_cell, batch_size)
-    step = step + 1
-    encoder_output, encoder_state = encoder_cell(encoder_inputs, encoder_state)
-
+    encoder_state = init_state(encoder_cell, batch_size)
+    with tf.variable_scope("encoder") as scope:
+        for time_step in xrange(ENCODER_NUM_STEPS):
+            if time_step > 0:
+                tf.get_variable_scope().reuse_variables()
+            encoder_output, encoder_state = encoder_cell(encoder_embedding_vectors[:, time_step, :], encoder_state)
+    #
     W2 = tf.Variable(np.random.rand(16, 1), dtype=tf.float32)
     b2 = tf.Variable(np.zeros((1, 1)), dtype=tf.float32)
 
     logits_series = tf.matmul(encoder_output, W2) + b2  # Broadcasted addition
     #
     predictions = logits_series
-    #
-    loss = tf.reduce_mean(tf.square(tf.subtract(decoder_inputs, predictions)))
-    train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
+    # #
+    # loss = tf.reduce_mean(tf.square(tf.subtract(decoder_inputs, predictions)))
+    # train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
         # with tf.variable_scope('decoder') as scope:
         #     decoder_inputs = tf.placeholder(tf.float32, shape=[None, 1], name="decoder")
         #     decoder_cell = stacked_rnn(32)
@@ -135,13 +148,13 @@ def train():
         sess.run(tf.global_variables_initializer())
         i = 0
         for e_inputs, d_inputs in gen:
-            train_step.run(feed_dict={encoder_inputs: e_inputs, decoder_inputs: d_inputs})
-            if (i + 1) % 10 == 0:
-                print(sess.run(loss, feed_dict={encoder_inputs: e_inputs, decoder_inputs:d_inputs}))
-                save_path = saver.save(sess, "../model/model.ckpt")
-                print("Model saved in file: %s" % save_path)
-            i = i + 1
-            # print('loss', loss.eval())
+            # train_step.run(feed_dict={encoder_inputs: e_inputs, decoder_inputs: d_inputs})
+            # if (i + 1) % 10 == 0:
+            #     print(sess.run(loss, feed_dict={encoder_inputs: e_inputs, decoder_inputs:d_inputs}))
+            #     save_path = saver.save(sess, "../model/model.ckpt")
+            #     print("Model saved in file: %s" % save_path)
+            # i = i + 1
+            print(sess.run(encoder_output, feed_dict={encoder_inputs:e_inputs, decoder_inputs:d_inputs}))
 
 def rnn_plus():
     return 0
