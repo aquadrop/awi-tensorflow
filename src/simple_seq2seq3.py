@@ -121,21 +121,20 @@ def train():
     last_encoder_state = encoder_state
     num_classes = VOL_SIZE
     loss = 0
+    decoder_outputs = []
     with tf.variable_scope("decoder") as scope:
         decoder_inputs = tf.placeholder(tf.int32, shape=(batch_size, DECODER_SEQ_LENGTH), name="decoder_inputs")
         decoder_embedding_vectors = tf.nn.embedding_lookup(embedding, decoder_inputs)
         decoder_cell = stacked_rnn(HIDDEN_UNIT)
+        ## use softmax to map decode_output to number(0-5,EOS)
+        W2 = tf.Variable(np.random.rand(HIDDEN_UNIT, num_classes), dtype=tf.float32)
+        b2 = tf.Variable(np.zeros((1, num_classes)), dtype=tf.float32)
         for time_step in xrange(DECODER_NUM_STEPS):
             if time_step > 0:
                 tf.get_variable_scope().reuse_variables()
             else:
                 decoder_state = last_encoder_state
             decoder_output, decoder_state = decoder_cell(decoder_embedding_vectors[:, time_step, :], decoder_state)
-
-            ## use softmax to map decode_output to number(0-5,EOS)
-            W2 = tf.Variable(np.random.rand(HIDDEN_UNIT, num_classes), dtype=tf.float32)
-            b2 = tf.Variable(np.zeros((1, num_classes)), dtype=tf.float32)
-
             logits_series = tf.matmul(decoder_output, W2) + b2  # Broadcasted addition
             # logits_series = tf.nn.softmax(logits_series, dim=1)
             y_ = labels_[:, time_step, :]
@@ -155,11 +154,23 @@ def train():
             train_step.run(feed_dict={encoder_inputs: e_inputs, decoder_inputs: d_inputs, labels_: labels})
             if (i + 1) % 100 == 0:
                 print(sess.run(loss, feed_dict={encoder_inputs: e_inputs, decoder_inputs: d_inputs, labels_: labels}))
-                save_path = saver.save(sess, "../model/model.ckpt")
+                save_path = saver.save(sess, "../model/model")
             i = i + 1
 
+def _check_restore_parameters(sess, saver):
+    """ Restore the previously trained parameters if there are any. """
+    ckpt = tf.train.get_checkpoint_state(os.path.dirname("../model"))
+    if ckpt and ckpt.model_checkpoint_path:
+        print("Loading parameters for the Chatbot")
+        saver.restore(sess, ckpt.model_checkpoint_path)
+    else:
+        print("Initializing fresh parameters for the Chatbot")
 
 def run_sort():
+    saver = tf.train.Saver()
+    with tf.Session() as sess:
+        _check_restore_parameters(sess, saver)
+
     return 0
 
 def loss(decoder_inputs, decoder_outputs):
