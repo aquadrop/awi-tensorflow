@@ -36,6 +36,10 @@ class SortModel:
     HIDDEN_UNIT = 128
     N_LAYER = 3
 
+
+    def __init__(self):
+        print('initilizing model...')
+
     def single_cell(self, size=128):
         if 'reuse' in inspect.getargspec(
                 tf.contrib.rnn.BasicLSTMCell.__init__).args:
@@ -53,13 +57,16 @@ class SortModel:
         # cells.append(single_cell(size/2))
         # return tf.contrib.rnn.MultiRNNCell(cells)
 
-    def __init__(self):
-        print('initilizing model...')
-
     def _create_placeholder(self):
-        self.labels_ = tf.placeholder(tf.float32, shape=(self.batch_size, self.DECODER_SEQ_LENGTH, self.VOL_SIZE))
+        self.labels_ = tf.placeholder(tf.float32, shape=(None, self.DECODER_SEQ_LENGTH, self.VOL_SIZE))
         with tf.variable_scope("encoder") as scope:
-            self.encoder_inputs = tf.placeholder(tf.int32, shape=(self.batch_size, self.ENCODER_SEQ_LENGTH), name="encoder_inputs")
+            self.encoder_inputs = tf.placeholder(tf.int32, shape=(None, self.ENCODER_SEQ_LENGTH), name="encoder_inputs")
+        with tf.variable_scope("decoder") as scope:
+            self.decoder_inputs = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH), name="decoder_inputs")
+
+    @staticmethod
+    def init_state(cell, batch_size):
+        return cell.zero_state(batch_size=batch_size, dtype=tf.float32)
 
     def _inference(self):
         self.embedding = tf.get_variable(
@@ -75,24 +82,18 @@ class SortModel:
                 encoder_output, encoder_state = self.encoder_cell(encoder_embedding_vectors[:, time_step, :], encoder_state)
 
         last_encoder_state = encoder_state
-        num_classes = self.VOL_SIZE
 
-        self.decode_outputs = []
+        self.decoder_outputs = []
         with tf.variable_scope("decoder") as scope:
-            decoder_inputs = tf.placeholder(tf.int32, shape=(self.batch_size, self.DECODER_SEQ_LENGTH), name="decoder_inputs")
-            decoder_embedding_vectors = tf.nn.embedding_lookup(embedding, decoder_inputs)
+            decoder_embedding_vectors = tf.nn.embedding_lookup(self.embedding, self.decoder_inputs)
             decoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
-            ## use softmax to map decode_output to number(0-5,EOS)
-            softmax_w = tf.get_variable(
-                "softmax_w", [self.HIDDEN_UNIT, num_classes], tf.float32)
-            softmax_b = tf.get_variable("softmax_b", [num_classes], dtype=tf.float32)
             for time_step in xrange(self.DECODER_NUM_STEPS):
                 if time_step > 0:
                     tf.get_variable_scope().reuse_variables()
                 else:
                     decoder_state = last_encoder_state
                 decoder_output, decoder_state = decoder_cell(decoder_embedding_vectors[:, time_step, :], decoder_state)
-                self.decode_outputs.append(decoder_output)
+                self.decoder_outputs.append(decoder_output)
 
                 # logits_series = tf.matmul(decoder_output, softmax_w) + softmax_b  # Broadcasted addition
                 # # logits_series = tf.nn.softmax(logits_series, dim=1)
@@ -101,13 +102,22 @@ class SortModel:
 
 
     def _create_optimizer(self):
-        loss = 0
+        self.loss = 0
+        num_classes = self.VOL_SIZE
+        ## use softmax to map decoder_output to number(0-5,EOS)
+        softmax_w = tf.get_variable(
+            "softmax_w", [self.HIDDEN_UNIT, num_classes], tf.float32)
+        softmax_b = tf.get_variable("softmax_b", [num_classes], dtype=tf.float32)
         for time_step in xrange(self.DECODER_SEQ_LENGTH):
-            decoder_output = self.decode_outputs[time_step]
+            decoder_output = self.decoder_outputs[time_step]
+            logits_series = tf.matmul(decoder_output, softmax_w) + softmax_b  # Broadcasted addition
+            y_ = self.labels_[:, time_step, :]
             cross_entropy = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=decoder_output))
-        loss = loss + cross_entropy
-        self.optimizer = tf.train.AdamOptimizer(1e-4).minimize(loss)
+                tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
+            self.loss = self.loss + cross_entropy
+        self.optimizer = tf.train.AdamOptimizer(1e-4).minimize(self.loss)
 
     def build_graph(self):
-        self._model()
+        self._create_placeholder()
+        self._inference()
+        self._create_optimizer()
