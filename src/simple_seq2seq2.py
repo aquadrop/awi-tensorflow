@@ -13,6 +13,9 @@ cs20si.stanford.edu
 This file contains the code to run the model.
 
 See readme.md for instruction on how to run the starter code.
+
+The task is simple: learn number plus, for instance: 1 + 1 = 2, 2 + 3 = 5
+This implementation is with embedding layer
 """
 from __future__ import division
 from __future__ import print_function
