@@ -36,9 +36,11 @@ class SortModel:
     HIDDEN_UNIT = 128
     N_LAYER = 3
 
+    TRAINABLE = True
 
-    def __init__(self):
+    def __init__(self, trainable = True):
         print('initilizing model...')
+        self.TRAINABLE = trainable
 
     def single_cell(self, size=128):
         if 'reuse' in inspect.getargspec(
@@ -85,32 +87,49 @@ class SortModel:
 
         self.decoder_outputs = []
         with tf.variable_scope("decoder") as scope:
-            decoder_embedding_vectors = tf.nn.embedding_lookup(self.embedding, self.decoder_inputs)
             decoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
-            for time_step in xrange(self.DECODER_NUM_STEPS):
-                if time_step > 0:
-                    tf.get_variable_scope().reuse_variables()
-                else:
-                    decoder_state = last_encoder_state
-                decoder_output, decoder_state = decoder_cell(decoder_embedding_vectors[:, time_step, :], decoder_state)
-                self.decoder_outputs.append(decoder_output)
+            if self.TRAINABLE:
+                decoder_embedding_vectors = tf.nn.embedding_lookup(self.embedding, self.decoder_inputs)
+                for time_step in xrange(self.DECODER_NUM_STEPS):
+                    if time_step > 0:
+                        tf.get_variable_scope().reuse_variables()
+                    else:
+                        decoder_state = last_encoder_state
+                    decoder_output, decoder_state = decoder_cell(decoder_embedding_vectors[:, time_step, :], decoder_state)
+                    self.decoder_outputs.append(decoder_output)
+            else:
+                gen_decoder_input = tf.constant(self.EOS, shape=(self.encoder_inputs.shape[0], 1), dtype=tf.int32)
+                for time_step in xrange(self.DECODER_NUM_STEPS):
+                    gen_decoder_input_vector = tf.nn.embedding_lookup(self.embedding, gen_decoder_input)
+                    decoder_output, decoder_state = decoder_cell(gen_decoder_input_vector, decoder_state)
+                    index = self.neural_decoder_output_index(decoder_output)
+                    gen_decoder_input = index.shape(-1, 1)
+                    self.decoder_outputs.append(decoder_output)
+
 
                 # logits_series = tf.matmul(decoder_output, softmax_w) + softmax_b  # Broadcasted addition
                 # # logits_series = tf.nn.softmax(logits_series, dim=1)
                 # y_ = labels_[:, time_step, :]
 
+    ## map decoder_output back to decoder_input(the index)
+    ## this function is used when decoder inputs aren't given
+    def neural_decoder_output_index(self, decoder_output):
+        logits_series = tf.matmul(decoder_output, self.softmax_w) + self.softmax_b
+        probs = tf.nn.softmax(logits_series)
+        index = tf.argmax(probs)
+        return index
 
 
     def _create_optimizer(self):
         self.loss = 0
         num_classes = self.VOL_SIZE
         ## use softmax to map decoder_output to number(0-5,EOS)
-        softmax_w = tf.get_variable(
+        self.softmax_w = tf.get_variable(
             "softmax_w", [self.HIDDEN_UNIT, num_classes], tf.float32)
-        softmax_b = tf.get_variable("softmax_b", [num_classes], dtype=tf.float32)
+        self.softmax_b = tf.get_variable("softmax_b", [num_classes], dtype=tf.float32)
         for time_step in xrange(self.DECODER_SEQ_LENGTH):
             decoder_output = self.decoder_outputs[time_step]
-            logits_series = tf.matmul(decoder_output, softmax_w) + softmax_b  # Broadcasted addition
+            logits_series = tf.matmul(decoder_output, self.softmax_w) + self.softmax_b  # Broadcasted addition
             y_ = self.labels_[:, time_step, :]
             cross_entropy = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
