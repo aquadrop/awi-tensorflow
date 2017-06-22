@@ -51,21 +51,19 @@ def gen_triple():
     _output = np.append(SortModel.EOS, _output)
     return _input, _output, label
 
-
-def plus_op_data():
+def sort_op_data(size = SortModel.batch_size):
     while True:
         encoder_inputs = []
         decoder_inputs = []
         labels = []  ## this is basically identical to decoder inputs tailed with EOS
-        for i in xrange(SortModel.batch_size):
+        for i in xrange(size):
             _input, _output, label = gen_triple()
             encoder_inputs.append(_input)
             decoder_inputs.append(_output)
             labels.append(label)
 
-        yield np.asarray(encoder_inputs, dtype=np.int32).reshape(SortModel.batch_size, SortModel.ENCODER_SEQ_LENGTH), np.asarray(
-            decoder_inputs, dtype=np.int32).reshape((SortModel.batch_size, SortModel.DECODER_SEQ_LENGTH)), np.asarray(labels)
-
+        yield np.asarray(encoder_inputs, dtype=np.int32).reshape(size, SortModel.ENCODER_NUM_STEPS), np.asarray(\
+            decoder_inputs, dtype=np.int32).reshape((size, SortModel.DECODER_NUM_STEPS)), np.asarray(labels)
 
 def train():
 
@@ -73,24 +71,43 @@ def train():
     model.build_graph()
     saver = tf.train.Saver()
     with tf.Session() as sess:
-        gen = plus_op_data()
+        gen = sort_op_data()
         sess.run(tf.global_variables_initializer())
+        _check_restore_parameters(sess, saver)
         i = 0
         for e_inputs, d_inputs, labels in gen:
-            model.optimizer.run(feed_dict={model.encoder_inputs.name: e_inputs,
-                                           model.decoder_inputs.name: d_inputs,
+            model.optimizer.run(feed_dict={model.encoder_inputs.name: e_inputs,\
+                                           model.decoder_inputs.name: d_inputs,\
                                            model.labels_.name: labels})
             if (i + 1) % 100 == 0:
-                print(sess.run(model.loss, feed_dict={model.encoder_inputs.name: e_inputs,
+                loss = sess.run(model.loss, feed_dict={model.encoder_inputs.name: e_inputs,
                     model.decoder_inputs.name: d_inputs,
-                    model.labels_.name: labels}))
-                saver.save(sess, "../model/model")
+                    model.labels_.name: labels})
+                print(loss)
+                if loss < 10:
+                    # print(sess.run(model.logits_, feed_dict={model.encoder_inputs.name: e_inputs,
+                    #                                       model.decoder_inputs.name: d_inputs,
+                    #                                       model.labels_.name: labels}))
+                    print(sess.run(model.encoder_inputs, feed_dict={model.encoder_inputs.name: e_inputs,\
+                                                             model.decoder_inputs.name: d_inputs,\
+                                                             model.labels_.name: labels})[0])
+                    print(sess.run(model.decoder_inputs, feed_dict={model.encoder_inputs.name: e_inputs,\
+                                                                    model.decoder_inputs.name: d_inputs,\
+                                                                    model.labels_.name: labels})[0])
+                    predictions = np.array(sess.run(model.predictions_, feed_dict={model.encoder_inputs.name: e_inputs,\
+                                                                    model.decoder_inputs.name: d_inputs,\
+                                                                    model.labels_.name: labels}))
+                    softmax_w = sess.run(model.softmax_w, feed_dict={model.encoder_inputs.name: e_inputs,\
+                                                                    model.decoder_inputs.name: d_inputs,\
+                                                                    model.labels_.name: labels})[0]
+                    predictions = predictions.reshape([-1, 4])[0]
+                    print("predictions:", predictions, softmax_w)
+                saver.save(sess, "../model/rnn/rnn", global_step=i)
             i = i + 1
-
 
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
-    ckpt = tf.train.get_checkpoint_state(os.path.dirname("../model"))
+    ckpt = tf.train.get_checkpoint_state(os.path.dirname("../model/rnn/rnn"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the SortBot")
         saver.restore(sess, ckpt.model_checkpoint_path)
@@ -104,20 +121,22 @@ def _get_user_input():
     return sys.stdin.readline()
 
 def run_sort():
-    model = SortModel()
+    model = SortModel(False)
     model.build_graph()
     saver = tf.train.Saver()
     with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
         _check_restore_parameters(sess, saver)
         while True:
             line = _get_user_input()
-            _input = [int(x) for x in line.split(",")]
-            _input = np.asarray(_input).reshape(1, 3)
-            decoder_outputs = sess.run(model.decoder_outputs, feed_dict={model.encoder_inputs.name: _input})
-            print(decoder_outputs)
+            # gen = sort_op_data(1)
+            e_inputs = list()
+            e_inputs.append(np.array([int(x) for x in line.split(",")]))
+            e_inputs = np.array(e_inputs)
+            predictions = np.array(np.array(sess.run(model.predictions_, feed_dict={model.encoder_inputs.name: e_inputs}))).reshape([-1, 4])
+            print(e_inputs, predictions)
 
     return 0
-
 
 if __name__ == "__main__":
     # train()

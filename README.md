@@ -12,6 +12,13 @@ Attention With Intention or Hierarchical Attention Model in tensorflow
 3. simple_seq2seq3.py simulates sort op with embedding layer based on seq2seq model(vanilla)
 4. simple_linear_model.py a testing file for tf.train.saver about saving and loading .meta file. And seperate the
     model in a defined class
-
+   continue training with saved model
+5. seq2seq_sort.py the complete model for sorting. It also supports continued training(or so called finetuing?)
+    * for instance:
+'''
+Loading parameters for the SortBot
+> 1,2,3
+[[1 2 3]] [[1 2 3 6]]
+'''
 
 
