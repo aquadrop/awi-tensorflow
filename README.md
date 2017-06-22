@@ -14,11 +14,11 @@ Attention With Intention or Hierarchical Attention Model in tensorflow
     model in a defined class
    continue training with saved model
 5. seq2seq_sort.py the complete model for sorting. It also supports continued training(or so called finetuing?)
-    * for instance:
-'''
+    * input 3,2,1->1,2,3,6 6 is EOS symbol
+```
 Loading parameters for the SortBot
 > 1,2,3
 [[1 2 3]] [[1 2 3 6]]
-'''
+```
 
 
