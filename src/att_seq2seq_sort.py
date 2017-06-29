@@ -30,6 +30,7 @@ import inspect
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python import debug as tf_debug
 
 class AttentionSortModel:
 
@@ -142,7 +143,7 @@ class AttentionSortModel:
                     attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah, decoder_state=decoder_state)
                     # self.e.append(e_iJ)
                     # LSTMStateTuple
-                    decoder_output, decoder_state = decoder_cell(decoder_embedding_vectors[:, time_step, :], decoder_state)
+                    decoder_output, decoder_state = decoder_cell(decoder_embedding_vectors[:, time_step, :], attended)
                     self.decoder_outputs.append(decoder_output)
             else:
                 gen_decoder_input = tf.constant(self.EOS, shape=(1, 1), dtype=tf.int32)
@@ -151,9 +152,11 @@ class AttentionSortModel:
                         tf.get_variable_scope().reuse_variables()
                     else:
                         decoder_state = last_encoder_state
-                    print('step:', time_step)
+
+                    attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah,
+                                               decoder_state=decoder_state)
                     gen_decoder_input_vector = tf.nn.embedding_lookup(self.embedding, gen_decoder_input)
-                    decoder_output, decoder_state = decoder_cell(gen_decoder_input_vector[:,0,:], decoder_state)
+                    decoder_output, decoder_state = decoder_cell(gen_decoder_input_vector[:,0,:], attended)
                     index = self._neural_decoder_output_index(decoder_output)
                     gen_decoder_input = tf.reshape(index,[-1, 1])
                     self.decoder_outputs.append(decoder_output)
@@ -261,6 +264,7 @@ def train():
     model.build_graph()
     saver = tf.train.Saver()
     with tf.Session() as sess:
+        # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
         gen = sort_op_data()
         sess.run(tf.global_variables_initializer())
         # _check_restore_parameters(sess, saver)
@@ -301,12 +305,12 @@ def train():
             #                                                         model.labels_.name: labels})[0]
             #         predictions = predictions.reshape([-1, 4])[0]
             #         print("predictions:", predictions, softmax_w)
-            #     saver.save(sess, "../model/rnn/rnn", global_step=i)
+                saver.save(sess, "../model/rnn/attention", global_step=i)
             i = i + 1
 
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
-    ckpt = tf.train.get_checkpoint_state(os.path.dirname("../model/rnn/rnn"))
+    ckpt = tf.train.get_checkpoint_state(os.path.dirname("../model/rnn/attention"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the SortBot")
         saver.restore(sess, ckpt.model_checkpoint_path)
@@ -332,14 +336,15 @@ def run_sort():
             e_inputs = list()
             e_inputs.append(np.array([int(x) for x in line.split(",")]))
             e_inputs = np.array(e_inputs)
-            predictions = np.array(np.array(sess.run(model.predictions_, feed_dict={model.encoder_inputs.name: e_inputs}))).reshape([-1, 4])
+            predictions = np.array(np.array(sess.run(model.predictions_, feed_dict={model.encoder_inputs.name: e_inputs})))\
+                .reshape([-1, AttentionSortModel.DECODER_NUM_STEPS])
             print(e_inputs, predictions)
 
     return 0
 
 if __name__ == "__main__":
-    train()
-    # run_sort()
+    # train()
+    run_sort()
     # a = np.random.rand(2,2)
     # x = tf.placeholder(tf.float32, shape=(2, 2))
     # y = tf.matmul(x, x)

@@ -23,5 +23,10 @@ Loading parameters for the SortBot(in which 6 is the EOS symbol
 > 3,2,1
 [[3 2 1]] [[1 2 3 6]]
 ```
+Sample Output for att_seq2seq_sort.py
+```
+> 5,4,3,2,1,1,2,3,4,5
+[[5 4 3 2 1 1 2 3 4 5]] [[1 1 2 2 3 3 4 4 5 5 6]]
+```
 
 
