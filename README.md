@@ -15,6 +15,9 @@ Attention With Intention or Hierarchical Attention Model in tensorflow
    continue training with saved model
 5. seq2seq_sort.py the complete model for sorting. It also supports continued training(or so called finetuing?)
     * input 3,2,1->1,2,3,6 6 is EOS symbol
+6. att_seq2seq_sort.py self-developed attention model for sort training. I refereced
+a. https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/legacy_seq2seq/python/ops/seq2seq.py
+b. https://arxiv.org/pdf/1412.7449.pdf section 2.1
 ```
 Loading parameters for the SortBot
 > 1,2,3
