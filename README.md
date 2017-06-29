@@ -19,9 +19,9 @@ Attention With Intention or Hierarchical Attention Model in tensorflow
 a. https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/legacy_seq2seq/python/ops/seq2seq.py
 b. https://arxiv.org/pdf/1412.7449.pdf section 2.1
 ```
-Loading parameters for the SortBot
-> 1,2,3
-[[1 2 3]] [[1 2 3 6]]
+Loading parameters for the SortBot(in which 6 is the EOS symbol
+> 3,2,1
+[[3 2 1]] [[1 2 3 6]]
 ```
 
 
