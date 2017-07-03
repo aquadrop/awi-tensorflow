@@ -215,16 +215,21 @@ class AttentionSortModel:
             cross_entropy = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
             self.loss = self.loss + cross_entropy
+        tf.summary.scalar("batch_loss", self.loss)
         self.predictions_ = [tf.argmax(logit, axis=1) for logit in self.logits_]
 
     def _create_optimizer(self):
         self.optimizer = tf.train.AdamOptimizer(1e-4).minimize(self.loss)
+
+    def _summary(self):
+        self.merged = tf.summary.merge_all()
 
     def build_graph(self):
         self._create_placeholder()
         self._inference()
         self._create_loss()
         self._create_optimizer()
+        self._summary()
 
 def one_hot_triple(index):
     zeros_a = np.zeros(AttentionSortModel.VOL_SIZE, dtype=np.float32)
@@ -267,6 +272,8 @@ def train():
         # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
         gen = sort_op_data()
         sess.run(tf.global_variables_initializer())
+        writer = tf.summary.FileWriter('../log',
+                                       sess.graph)
         # _check_restore_parameters(sess, saver)
         i = 0
         for e_inputs, d_inputs, labels in gen:
@@ -283,9 +290,10 @@ def train():
                                            model.decoder_inputs.name: d_inputs,\
                                            model.labels_.name: labels})
             if (i + 1) % 100 == 0:
-                loss = sess.run(model.loss, feed_dict={model.encoder_inputs.name: e_inputs,
+                summary, loss = sess.run([model.merged, model.loss], feed_dict={model.encoder_inputs.name: e_inputs,
                     model.decoder_inputs.name: d_inputs,
                     model.labels_.name: labels})
+                writer.add_summary(summary, i)
                 print("step:", i, loss)
             #     if loss < 10:
             #         # print(sess.run(model.logits_, feed_dict={model.encoder_inputs.name: e_inputs,
@@ -343,8 +351,8 @@ def run_sort():
     return 0
 
 if __name__ == "__main__":
-    # train()
-    run_sort()
+    train()
+    # run_sort()
     # a = np.random.rand(2,2)
     # x = tf.placeholder(tf.float32, shape=(2, 2))
     # y = tf.matmul(x, x)
