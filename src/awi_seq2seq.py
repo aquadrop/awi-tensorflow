@@ -39,19 +39,19 @@ from tensorflow.python import debug as tf_debug
 
 class AttentionSortModel:
 
-    batch_size = 32
+    batch_size = 1
 
     VOL_SIZE = 7
     EOS = VOL_SIZE - 1
     EMBEDDING_SIZE = 10
-    ENCODER_SEQ_LENGTH = 5
+    ENCODER_SEQ_LENGTH = 2
     ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
-    DECODER_SEQ_LENGTH = ENCODER_SEQ_LENGTH + 2  ## plus 1 EOS
+    DECODER_SEQ_LENGTH =  2  ## plus 1 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
-    TURN_LENGTH = 3
+    # TURN_LENGTH = 3
 
-    HIDDEN_UNIT = 128
-    N_LAYER = 3
+    HIDDEN_UNIT = 64
+    N_LAYER = 5
 
     TRAINABLE = True
 
@@ -187,17 +187,6 @@ class AttentionSortModel:
                     # LSTMStateTuple
                     decoder_output, decoder_state = self.decoder_cell(decoder_embedding_vectors[:, time_step, :], attended)
                     self.decoder_outputs.append(decoder_output)
-
-
-                ## update states for next batch: decoder_state, intention_state
-                self.decoder_state_update_op = self.get_state_update_op(self.decoder_state, decoder_state)
-                self.intention_state_update_op = self.get_state_update_op(self.intention_state, intention_state)
-                self.encoder_state_update_op = self.get_state_update_op(self.encoder_state, decoder_state)
-
-                ## reset op whenever a new turn begins
-                self.reset_decoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell, self.batch_size)
-                self.reset_encoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell, self.batch_size)
-                self.reset_intention_state_op = self.get_state_reset_op(self.intention_state, self.intention_cell, self.batch_size)
             else:
                 gen_decoder_input = tf.constant(self.EOS, shape=(1, 1), dtype=tf.int32)
                 for time_step in xrange(self.DECODER_NUM_STEPS):
@@ -214,6 +203,19 @@ class AttentionSortModel:
                     gen_decoder_input = tf.reshape(index,[-1, 1])
                     self.decoder_outputs.append(decoder_output)
                     self.internal.append(gen_decoder_input)
+
+            ## update states for next batch: decoder_state, intention_state
+            self.decoder_state_update_op = self.get_state_update_op(self.decoder_state, decoder_state)
+            self.intention_state_update_op = self.get_state_update_op(self.intention_state, intention_state)
+            self.encoder_state_update_op = self.get_state_update_op(self.encoder_state, decoder_state)
+
+            ## reset op whenever a new turn begins
+            self.reset_decoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell,
+                                                                  self.batch_size)
+            self.reset_encoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell,
+                                                                  self.batch_size)
+            self.reset_intention_state_op = self.get_state_reset_op(self.intention_state, self.intention_cell,
+                                                                    self.batch_size)
                 # logits_series = tf.matmul(decoder_output, softmax_w) + softmax_b  # Broadcasted addition
                 # # logits_series = tf.nn.softmax(logits_series, dim=1)
                 # y_ = labels_[:, time_step, :]
@@ -331,47 +333,48 @@ def one_hot_triple(index):
 
 def gen_triple(sum_ = 0):
     _input = np.random.random_integers(low=0, high=AttentionSortModel.VOL_SIZE - 2, size=AttentionSortModel.ENCODER_SEQ_LENGTH)
-    _output = np.sort(_input)
+    # _output = np.sort(_input)
 
     label = []
     ## and compute sum
-    for o in _output:
-        label.append(one_hot_triple(o))
+    for o in _input:
+        # label.append(one_hot_triple(o))
         sum_ = sum_ + o
     sum_ = sum_ % (AttentionSortModel.VOL_SIZE - 2)
     label.append(one_hot_triple(int(sum_)))
-    _output = np.append(_output, sum_)
+    _output = np.array([AttentionSortModel.EOS, sum_])
 
     label.append(one_hot_triple(AttentionSortModel.EOS))
 
-    _output = np.append(AttentionSortModel.EOS, _output)
+    # _output = np.append(AttentionSortModel.EOS, _output)
     return _input, _output, label, sum_
 
 def sort_and_sum_op_data(batch_size = AttentionSortModel.batch_size):
+    batch_sum_ = np.zeros(batch_size)
     while True:
-        turn_batch_dialog = []
-        batch_sum_ = np.zeros(batch_size)
-        for turn in xrange(AttentionSortModel.TURN_LENGTH):
-            single_turn_encoder_inputs = []
-            single_turn_decoder_inputs = []
-            single_turn_labels = []
-            for batch_index in xrange(batch_size):
-                encoder_input, decoder_input, label, sum_ = gen_triple(sum_=batch_sum_[batch_index])
-                batch_sum_[batch_index] = sum_
-                single_turn_encoder_inputs.append(encoder_input)
-                single_turn_decoder_inputs.append(decoder_input)
-                single_turn_labels.append(label)
-            stei = np.array(single_turn_encoder_inputs).reshape(batch_size, AttentionSortModel.ENCODER_NUM_STEPS)
-            stdi = np.array(single_turn_decoder_inputs).reshape(batch_size, AttentionSortModel.DECODER_NUM_STEPS)
-            stl = np.array(single_turn_labels)
-            turn_batch_dialog.append([stei, stdi, stl])
-        yield turn_batch_dialog
+        # turn_dialog = []
+        # for turn in xrange(AttentionSortModel.TURN_LENGTH):
+        single_turn_encoder_inputs = []
+        single_turn_decoder_inputs = []
+        single_turn_labels = []
+        for batch_index in xrange(batch_size):
+            encoder_input, decoder_input, label, sum_ = gen_triple(sum_=batch_sum_[batch_index])
+            batch_sum_[batch_index] = sum_
+            single_turn_encoder_inputs.append(encoder_input)
+            single_turn_decoder_inputs.append(decoder_input)
+            single_turn_labels.append(label)
+        stei = np.array(single_turn_encoder_inputs).reshape(batch_size, AttentionSortModel.ENCODER_NUM_STEPS)
+        stdi = np.array(single_turn_decoder_inputs).reshape(batch_size, AttentionSortModel.DECODER_NUM_STEPS)
+        stl = np.array(single_turn_labels)
+
+            # turn_dialog.append([stei, stdi, stl])
+        yield stei, stdi, stl
 
 def train():
 
     model = AttentionSortModel()
     model.build_graph()
-    # saver = tf.train.Saver()
+    saver = tf.train.Saver()
     with tf.Session() as sess:
         # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
         gen = sort_and_sum_op_data()
@@ -380,71 +383,32 @@ def train():
                                        sess.graph)
         # _check_restore_parameters(sess, saver)
         i = 0
-        for multi_turn_dialog in gen:
-            model.reset_turn()
-            turn = 0
+        all_loss = np.ones(10)
+        all_loss_index = 0
+        for stei, stdi, stl in gen:
+            model.optimizer.run(feed_dict={model.encoder_inputs.name: stei,\
+                                           model.decoder_inputs.name: stdi,\
+                                           model.labels_.name: stl})
 
-            # sess.run(model.reset_encoder_state_op)
-            # sess.run(model.reset_decoder_state_op)
-            # sess.run(model.reset_intention_state_op)
-            for single_turn_dialog in multi_turn_dialog:
+            if (i + 1) % 1 == 0:
+                loss1,p = sess.run(
+                    [model.loss,model.predictions_],
+                    feed_dict={model.encoder_inputs.name: stei, \
+                               model.decoder_inputs.name: stdi, \
+                               model.labels_.name: stl})
+                all_loss_index += 1
+                all_loss[all_loss_index % 10] = loss1
 
-                stei = single_turn_dialog[0]
-                stdi = single_turn_dialog[1]
-                stl = single_turn_dialog[2]
+                # writer.add_summary(summary, i)
+                print("step and turn-1", i, stei, stdi, loss1, p)
+                if np.average(all_loss) < 0.01:
+                    print('saving_model...', loss1)
+                    saver.save(sess, "../model/rnn/awi", global_step=i)
 
-                sess.run([model.encoder_state_update_op, model.decoder_state_update_op, model.intention_state_update_op],
-                                          feed_dict={model.encoder_inputs.name: stei, \
-                                                 model.decoder_inputs.name: stdi,\
-                                                 model.labels_.name: stl})
-
-                model.optimizer.run(feed_dict={model.encoder_inputs.name: stei,\
-                                               model.decoder_inputs.name: stdi,\
-                                               model.labels_.name: stl})
-                if (i + 1) % 10 == 0:
-                    loss1 = sess.run(
-                        [model.loss],
-                        feed_dict={model.encoder_inputs.name: stei, \
-                                   model.decoder_inputs.name: stdi, \
-                                   model.labels_.name: stl})
-                    loss2 = sess.run(
-                        [model.loss],
-                        feed_dict={model.encoder_inputs.name: stei, \
-                                   model.decoder_inputs.name: stdi, \
-                                   model.labels_.name: stl})
-                    # sess.run(
-                    #     [model.encoder_state_update_op, model.decoder_state_update_op, model.intention_state_update_op],
-                    #     feed_dict={model.encoder_inputs.name: stei, \
-                    #                model.decoder_inputs.name: stdi, \
-                    #                model.labels_.name: stl})
-                    # loss = sess.run([model.loss], feed_dict={model.encoder_inputs.name: stei,\
-                    #                            model.decoder_inputs.name: stdi,\
-                    #                            model.labels_.name: stl})
-
-
-                    # writer.add_summary(summary, i)
-                    print("step and turn-1", i, model.turn_index, loss1, loss2)
-                model.increment_turn()
-                turn = turn + 1
-            # #     if loss < 10:
-            # #         # print(sess.run(model.logits_, feed_dict={model.encoder_inputs.name: e_inputs,
-            # #         #                                       model.decoder_inputs.name: d_inputs,
-            # #         #                                       model.labels_.name: labels}))
-            # #         print(sess.run(model.encoder_inputs, feed_dict={model.encoder_inputs.name: e_inputs,\
-            # #                                                  model.decoder_inputs.name: d_inputs,\
-            # #                                                  model.labels_.name: labels})[0])
-            # #         print(sess.run(model.decoder_inputs, feed_dict={model.encoder_inputs.name: e_inputs,\
-            # #                                                         model.decoder_inputs.name: d_inputs,\
-            # #                                                         model.labels_.name: labels})[0])
-            # #         predictions = np.array(sess.run(model.predictions_, feed_dict={model.encoder_inputs.name: e_inputs,\
-            # #                                                         model.decoder_inputs.name: d_inputs,\
-            # #                                                         model.labels_.name: labels}))
-            # #         softmax_w = sess.run(model.softmax_w, feed_dict={model.encoder_inputs.name: e_inputs,\
-            # #                                                         model.decoder_inputs.name: d_inputs,\
-            # #                                                         model.labels_.name: labels})[0]
-            # #         predictions = predictions.reshape([-1, 4])[0]
-            # #         print("predictions:", predictions, softmax_w)
-            #     saver.save(sess, "../model/rnn/attention", global_step=i)
+            sess.run([model.encoder_state_update_op, model.decoder_state_update_op, model.intention_state_update_op],
+                     feed_dict={model.encoder_inputs.name: stei, \
+                                model.decoder_inputs.name: stdi})
+            # turn = turn + 1
             i = i + 1
 
 def _check_restore_parameters(sess, saver):
@@ -477,16 +441,17 @@ def run_sort():
             e_inputs = np.array(e_inputs)
             predictions = np.array(np.array(sess.run(model.predictions_, feed_dict={model.encoder_inputs.name: e_inputs})))\
                 .reshape([-1, AttentionSortModel.DECODER_NUM_STEPS])
+            sess.run([model.encoder_state_update_op, model.decoder_state_update_op, model.intention_state_update_op],
+                     feed_dict={model.encoder_inputs.name: e_inputs})
             print(e_inputs, predictions)
 
     return 0
 
 if __name__ == "__main__":
     # gen = sort_and_sum_op_data()
-    # for multi_turn_dialog in gen:
-    #     for single_turn_dialog in multi_turn_dialog:
-    #         print(single_turn_dialog[0], single_turn_dialog[1], single_turn_dialog[2])
-    #     break
+    # for a,b,c in gen:
+    #     print(a,b,c)
+
     train()
     # run_sort()
     # a = np.random.rand(2,2)
