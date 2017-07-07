@@ -118,6 +118,9 @@ class AttentionSortModel:
         self.W_a = self.variable(name="attention_w_a", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
         self.U_a = self.variable(name="attention_u_a", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
         self.v_a = self.variable(name="attention_v_a", shape=[self.HIDDEN_UNIT, 1])
+
+        self.I_W = self.variable(name="intention_w", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
+        self.I_U = self.variable(name="intention_u", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
         # self.C = self.variable(name="attention_C", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
 
         with tf.variable_scope("encoder") as scope:
