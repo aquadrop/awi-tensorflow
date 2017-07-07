@@ -122,7 +122,7 @@ class AttentionSortModel:
         U_ah = []
         for h in hidden_states:
             ## h.shape is BATCH, HIDDEN_UNIT
-            u_ahj = tf.matmul(h, self.W_a)
+            u_ahj = tf.matmul(h, self.U_a)
             U_ah.append(u_ahj)
 
         last_encoder_state = encoder_state

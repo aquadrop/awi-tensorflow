@@ -39,18 +39,18 @@ from tensorflow.python import debug as tf_debug
 
 class AttentionSortModel:
 
-    batch_size = 1
+    batch_size = 32
 
     VOL_SIZE = 7
     EOS = VOL_SIZE - 1
     EMBEDDING_SIZE = 10
-    ENCODER_SEQ_LENGTH = 3
+    ENCODER_SEQ_LENGTH = 5
     ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
     DECODER_SEQ_LENGTH = ENCODER_SEQ_LENGTH + 2  ## plus 1 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
-    TURN_LENGTH = 2
+    TURN_LENGTH = 3
 
-    HIDDEN_UNIT = 4
+    HIDDEN_UNIT = 128
     N_LAYER = 3
 
     TRAINABLE = True
@@ -90,17 +90,6 @@ class AttentionSortModel:
             self.encoder_inputs = tf.placeholder(tf.int32, shape=(None, self.ENCODER_SEQ_LENGTH), name="encoder_inputs")
         with tf.variable_scope("decoder") as scope:
             self.decoder_inputs = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH), name="decoder_inputs")
-            '''
-            create cross-batch placeholder to store hidden_states// decoder_state
-            '''
-            self.turn_decoder_state = tf.placeholder(tf.float32, shape=(self.N_LAYER, 2, None, self.HIDDEN_UNIT))
-
-        with tf.variable_scope("intention") as scope:
-            '''
-            create cross-batch placeholder to store hidden_states// intention_state
-            2 is for tuple
-            '''
-            self.turn_intention_state = tf.placeholder(tf.float32, shape=(self.N_LAYER, 2, None, self.HIDDEN_UNIT))
 
     def init_state(self, cell, batch_size):
         if self.TRAINABLE:
@@ -135,13 +124,13 @@ class AttentionSortModel:
             encoder_embedding_vectors = tf.nn.embedding_lookup(self.embedding, self.encoder_inputs)
             self.encoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
 
-            l = tf.unstack(self.turn_decoder_state, axis=0)
-            encoder_state = tuple(
-                [tf.nn.rnn_cell.LSTMStateTuple(l[idx][0], l[idx][1]) for idx in range(self.N_LAYER)])
+            self.encoder_state = self.get_state_variables(self.batch_size, self.encoder_cell)
 
             for time_step in xrange(self.ENCODER_NUM_STEPS):
                 if time_step > 0:
                     tf.get_variable_scope().reuse_variables()
+                else:
+                    encoder_state = self.encoder_state
                 encoder_output, encoder_state = self.encoder_cell(encoder_embedding_vectors[:, time_step, :], encoder_state)
                 ## can be concat way
                 hidden_state = self._build_hidden(encoder_state) ##
@@ -151,41 +140,34 @@ class AttentionSortModel:
         U_ah = []
         for h in hidden_states:
             ## h.shape is BATCH, HIDDEN_UNIT
-            u_ahj = tf.matmul(h, self.W_a)
+            u_ahj = tf.matmul(h, self.U_a)
             U_ah.append(u_ahj)
 
-        self.last_encoder_state = encoder_state
         hidden_states = tf.stack(hidden_states)
         self.decoder_outputs = []
         self.internal = []
 
         with tf.variable_scope("decoder") as scope:
             self.decoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
+            self.decoder_state = self.get_state_variables(self.batch_size, self.decoder_cell)
 
         ## building intention network
         with tf.variable_scope("intention") as scope:
             self.intention_cell = self.stacked_rnn(self.HIDDEN_UNIT)
-
-            l1 = tf.unstack(self.turn_intention_state, axis=0)
-            decoder_state = tuple(
-                [tf.nn.rnn_cell.LSTMStateTuple(l1[idx][0], l1[idx][1]) for idx in range(self.N_LAYER)])
-            l2 = tf.unstack(self.turn_decoder_state, axis=0)
-            self.intention_state = tuple(
-                [tf.nn.rnn_cell.LSTMStateTuple(l2[idx][0], l2[idx][1]) for idx in range(self.N_LAYER)])
-
+            self.intention_state = self.get_state_variables(self.batch_size, self.intention_cell)
 
             cT_encoder= U_ah[-1]
             intention_states = []
             for i in xrange(len(self.intention_state)):
-                self.b = self.intention_state[i]
-                dc = decoder_state[i]
-                self.dch = dc[1]
-                self.c = self.b[0]
-                self.h = self.b[1]
-                self.h_ = tf.concat([self.h, self.dch], 1)
-                self.intention_hidden_state = tf.contrib.rnn.LSTMStateTuple(self.c, self.h_)
-                intention_states.append(self.intention_hidden_state)
-            intention_output, self.intention_state = self.intention_cell(cT_encoder, intention_states)
+                b = self.intention_state[i]
+                dc = self.decoder_state[i]
+                dch = dc[1]
+                c = b[0]
+                h = b[1]
+                h_ = tf.concat([h, dch], 1)
+                intention_hidden_state = tf.contrib.rnn.LSTMStateTuple(c, h_)
+                intention_states.append(intention_hidden_state)
+            intention_output, intention_state = self.intention_cell(cT_encoder, intention_states)
 
         with tf.variable_scope("decoder") as scope:
             if self.TRAINABLE:
@@ -197,7 +179,7 @@ class AttentionSortModel:
                         '''
                         plugin the intention state here!!!
                         '''
-                        decoder_state = self.intention_state
+                        decoder_state = intention_state
 
                     # attended = decoder_state
                     attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah, decoder_state=decoder_state)
@@ -205,7 +187,17 @@ class AttentionSortModel:
                     # LSTMStateTuple
                     decoder_output, decoder_state = self.decoder_cell(decoder_embedding_vectors[:, time_step, :], attended)
                     self.decoder_outputs.append(decoder_output)
-                self.decoder_state = decoder_state
+
+
+                ## update states for next batch: decoder_state, intention_state
+                self.decoder_state_update_op = self.get_state_update_op(self.decoder_state, decoder_state)
+                self.intention_state_update_op = self.get_state_update_op(self.intention_state, intention_state)
+                self.encoder_state_update_op = self.get_state_update_op(self.encoder_state, decoder_state)
+
+                ## reset op whenever a new turn begins
+                self.reset_decoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell, self.batch_size)
+                self.reset_encoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell, self.batch_size)
+                self.reset_intention_state_op = self.get_state_reset_op(self.intention_state, self.intention_cell, self.batch_size)
             else:
                 gen_decoder_input = tf.constant(self.EOS, shape=(1, 1), dtype=tf.int32)
                 for time_step in xrange(self.DECODER_NUM_STEPS):
@@ -265,9 +257,9 @@ class AttentionSortModel:
         return index
 
     def _create_loss(self):
-        self.loss = 0
+        # self.loss = tf.get_variable('loss', dtype=tf.float32, trainable=False,shape=[1])
         self.logits_ = []
-
+        loss = 0
         for time_step in xrange(self.DECODER_NUM_STEPS):
             decoder_output = self.decoder_outputs[time_step]
             logits_series = tf.matmul(decoder_output, self.softmax_w) + self.softmax_b  # Broadcasted addition
@@ -275,8 +267,14 @@ class AttentionSortModel:
             y_ = self.labels_[:, time_step, :]
             cross_entropy = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
-            self.loss = self.loss + cross_entropy
-        tf.summary.scalar("batch_loss", self.loss)
+            loss = loss + cross_entropy
+
+        self.loss = loss
+
+        # ## reset loss op
+        # self.reset_loss_op = tf.assign(self.loss, [0])
+        # self.plus_loss_op = tf.add(self.loss, [loss])
+        # tf.summary.scalar("batch_loss", self.loss)
         self.predictions_ = [tf.argmax(logit, axis=1) for logit in self.logits_]
 
     def _create_optimizer(self):
@@ -284,6 +282,39 @@ class AttentionSortModel:
 
     def _summary(self):
         self.merged = tf.summary.merge_all()
+
+    '''
+    https://stackoverflow.com/questions/37969065/tensorflow-best-way-to-save-state-in-rnns
+    '''
+    def get_state_variables(self, batch_size, cell):
+        # For each layer, get the initial state and make a variable out of it
+        # to enable updating its value.
+        state_variables = []
+        for state_c, state_h in cell.zero_state(batch_size, tf.float32):
+            state_variables.append(tf.contrib.rnn.LSTMStateTuple(
+                tf.Variable(state_c, trainable=False),
+                tf.Variable(state_h, trainable=False)))
+        # Return as a tuple, so that it can be fed to dynamic_rnn as an initial state
+        return tuple(state_variables)
+
+    '''
+    https://stackoverflow.com/questions/37969065/tensorflow-best-way-to-save-state-in-rnns
+    '''
+    def get_state_update_op(self, state_variables, new_states):
+        # Add an operation to update the train states with the last state tensors
+        update_ops = []
+        for state_variable, new_state in zip(state_variables, new_states):
+            # Assign the new state to the state variables on this layer
+            update_ops.extend([tf.assign(state_variable[0], new_state[0]),
+                               tf.assign(state_variable[1], new_state[1])])
+        # Return a tuple in order to combine all update_ops into a single operation.
+        # The tuple's actual value should not be used.
+        return tf.tuple(update_ops)
+
+    def get_state_reset_op(self, state_variables, cell, batch_size):
+        # Return an operation to set each variable in a list of LSTMStateTuples to zero
+        zero_states = cell.zero_state(batch_size, tf.float32)
+        return self.get_state_update_op(state_variables, zero_states)
 
     def build_graph(self):
         self._create_placeholder()
@@ -299,7 +330,7 @@ def one_hot_triple(index):
 
 
 def gen_triple(sum_ = 0):
-    _input = np.random.random_integers(AttentionSortModel.VOL_SIZE - 2, size=AttentionSortModel.ENCODER_SEQ_LENGTH)
+    _input = np.random.random_integers(low=0, high=AttentionSortModel.VOL_SIZE - 2, size=AttentionSortModel.ENCODER_SEQ_LENGTH)
     _output = np.sort(_input)
 
     label = []
@@ -308,8 +339,8 @@ def gen_triple(sum_ = 0):
         label.append(one_hot_triple(o))
         sum_ = sum_ + o
     sum_ = sum_ % (AttentionSortModel.VOL_SIZE - 2)
-    label.insert(0, one_hot_triple(int(sum_)))
-    _output = np.append(sum_, _output)
+    label.append(one_hot_triple(int(sum_)))
+    _output = np.append(_output, sum_)
 
     label.append(one_hot_triple(AttentionSortModel.EOS))
 
@@ -352,37 +383,47 @@ def train():
         for multi_turn_dialog in gen:
             model.reset_turn()
             turn = 0
-            for single_turn_dialog in multi_turn_dialog:
 
-                if turn == 0:
-                    turn_decoder_state = model.init_state(model.decoder_cell, model.batch_size)
-                    turn_intention_state = model.init_state(model.intention_cell, model.batch_size)
-                else:
-                    turn_decoder_state = model.decoder_state
-                    turn_intention_state = model.intention_state
+            # sess.run(model.reset_encoder_state_op)
+            # sess.run(model.reset_decoder_state_op)
+            # sess.run(model.reset_intention_state_op)
+            for single_turn_dialog in multi_turn_dialog:
 
                 stei = single_turn_dialog[0]
                 stdi = single_turn_dialog[1]
                 stl = single_turn_dialog[2]
 
+                sess.run([model.encoder_state_update_op, model.decoder_state_update_op, model.intention_state_update_op],
+                                          feed_dict={model.encoder_inputs.name: stei, \
+                                                 model.decoder_inputs.name: stdi,\
+                                                 model.labels_.name: stl})
+
                 model.optimizer.run(feed_dict={model.encoder_inputs.name: stei,\
                                                model.decoder_inputs.name: stdi,\
-                                               model.labels_.name: stl,
-                                               model.turn_decoder_state.name: turn_decoder_state,
-                                               model.turn_intention_state.name: turn_intention_state})
+                                               model.labels_.name: stl})
                 if (i + 1) % 10 == 0:
-                    ii, a,b,c,d = sess.run([model.b, model.c, model.h, model.dch, model.h_], feed_dict={model.encoder_inputs.name: stei,\
-                                               model.decoder_inputs.name: stdi,\
-                                               model.labels_.name: stl,
-                                               model.turn_decoder_state.name: turn_decoder_state,
-                                               model.turn_intention_state.name: turn_intention_state})
+                    loss1 = sess.run(
+                        [model.loss],
+                        feed_dict={model.encoder_inputs.name: stei, \
+                                   model.decoder_inputs.name: stdi, \
+                                   model.labels_.name: stl})
+                    loss2 = sess.run(
+                        [model.loss],
+                        feed_dict={model.encoder_inputs.name: stei, \
+                                   model.decoder_inputs.name: stdi, \
+                                   model.labels_.name: stl})
+                    # sess.run(
+                    #     [model.encoder_state_update_op, model.decoder_state_update_op, model.intention_state_update_op],
+                    #     feed_dict={model.encoder_inputs.name: stei, \
+                    #                model.decoder_inputs.name: stdi, \
+                    #                model.labels_.name: stl})
+                    # loss = sess.run([model.loss], feed_dict={model.encoder_inputs.name: stei,\
+                    #                            model.decoder_inputs.name: stdi,\
+                    #                            model.labels_.name: stl})
+
 
                     # writer.add_summary(summary, i)
-                    print("step and turn-1", i, model.turn_index, ii)
-                    print("step and turn1", i, model.turn_index, a)
-                    print("step and turn2", i, model.turn_index, b)
-                    print("step and turn3", i, model.turn_index, c)
-                    print("step and turn4", i, model.turn_index, d)
+                    print("step and turn-1", i, model.turn_index, loss1, loss2)
                 model.increment_turn()
                 turn = turn + 1
             # #     if loss < 10:

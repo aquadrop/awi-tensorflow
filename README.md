@@ -18,6 +18,14 @@ Attention With Intention or Hierarchical Attention Model in tensorflow
 6. att_seq2seq_sort.py self-developed attention model for sort training. I refereced
 a. https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/legacy_seq2seq/python/ops/seq2seq.py
 b. https://arxiv.org/pdf/1412.7449.pdf section 2.1
+7. awi_seq2seq develops attention-with-intention model. The task is to compute sort appended with sum%vol
+
+   Task example:
+   seq1: 2,1,3 --> 1,2,3,1 the last number is (2+1+3)%5
+   seq2: 2,3,2 --> 2,2,3,3 the last number is (2+3+2+1) %5
+   seq3: ...
+
+   The model is "kind of " converged
 ```
 Loading parameters for the SortBot(in which 6 is the EOS symbol
 > 3,2,1
