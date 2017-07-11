@@ -46,11 +46,11 @@ class AttentionSortModel:
     EMBEDDING_SIZE = 10
     ENCODER_SEQ_LENGTH = 2
     ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
-    DECODER_SEQ_LENGTH =  2  ## plus 1 EOS
+    DECODER_SEQ_LENGTH =  3  ## plus 0 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
     # TURN_LENGTH = 3
 
-    HIDDEN_UNIT = 64
+    HIDDEN_UNIT = 128
     N_LAYER = 3
 
     TRAINABLE = True
@@ -117,10 +117,14 @@ class AttentionSortModel:
         hidden_states = []
         self.W_a = self.variable(name="attention_w_a", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
         self.U_a = self.variable(name="attention_u_a", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
-        self.v_a = self.variable(name="attention_v_a", shape=[self.HIDDEN_UNIT, 1])
+        self.v_a = self.variable(name="attention_v_a", shape=[1, self.EMBEDDING_SIZE])
 
-        self.I_W = self.variable(name="intention_w", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
-        self.I_U = self.variable(name="intention_u", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
+        ## connect intention with decoder
+        ## connect intention with intention
+        self.I_E = self.variable(name="intention_e", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
+        self.encoder_to_intention_b = self.variable(name="encoder_intention_b", shape=[self.HIDDEN_UNIT])
+        self.I_I = self.variable(name="intention_i", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
+        self.intention_to_decoder_b = self.variable(name="intention_decoder_b", shape=[self.HIDDEN_UNIT])
         # self.C = self.variable(name="attention_C", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
 
         with tf.variable_scope("encoder") as scope:
@@ -133,49 +137,70 @@ class AttentionSortModel:
                 if time_step > 0:
                     tf.get_variable_scope().reuse_variables()
                 else:
-                    encoder_state = self.init_state(self.encoder_cell, self.batch_size)
+                    encoder_state = self.encoder_state
                 encoder_output, encoder_state = self.encoder_cell(encoder_embedding_vectors[:, time_step, :], encoder_state)
                 ## can be concat way
-                hidden_state = self._build_hidden(encoder_state) ##
+                hidden_state = self._concat_hidden(encoder_state) ##
                 hidden_states.append(hidden_state) ## steps, (batch, hidden_unit) <-- tensor
 
-        # # compute U_a*h_j quote:"this vector can be pre-computed.. U_a is R^n * n, h_j is R^n"
+        # compute U_a*h_j quote:"this vector can be pre-computed.. U_a is R^n * n, h_j is R^n"
         # U_ah = []
         # for h in hidden_states:
         #     ## h.shape is BATCH, HIDDEN_UNIT
         #     u_ahj = tf.matmul(h, self.U_a)
         #     U_ah.append(u_ahj)
-        #
+
         # hidden_states = tf.stack(hidden_states)
         self.decoder_outputs = []
         # self.internal = []
         #
-        # with tf.variable_scope("decoder") as scope:
-        #     self.decoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
-        #     self.decoder_state = self.get_state_variables(self.batch_size, self.decoder_cell)
+        with tf.variable_scope("decoder") as scope:
+            self.decoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
+            self.decoder_state = self.get_state_variables(self.batch_size, self.decoder_cell)
         #
-        # ## building intention network
-        # with tf.variable_scope("intention") as scope:
-        #     self.intention_cell = self.stacked_rnn(self.HIDDEN_UNIT)
-        #     self.intention_state = self.get_state_variables(self.batch_size, self.intention_cell)
-        #
-        #     cT_encoder= U_ah[-1]
-        #     intention_states = []
-        #     for i in xrange(len(self.intention_state)):
-        #         b = self.intention_state[i]
-        #         dc = self.decoder_state[i]
-        #         dch = dc[1]
-        #         c = b[0]
-        #         h = b[1]
-        #         h_ = tf.concat([h, dch], 1)
-        #         intention_hidden_state = tf.contrib.rnn.LSTMStateTuple(c, h_)
-        #         intention_states.append(intention_hidden_state)
-        #     intention_output, intention_state = self.intention_cell(cT_encoder, intention_states)
+        # building intention network
+        with tf.variable_scope("intention") as scope:
+            self.intention_cell = self.stacked_rnn(self.HIDDEN_UNIT)
+            self.intention_state = self.get_state_variables(self.batch_size, self.intention_cell)
+            if self.turn_index > 0:
+                tf.get_variable_scope().reuse_variables()
+            # for encoder_step_hidden_state in hidden_states:
+            intention_output, intention_state = self.intention_cell(hidden_state, self.intention_state)
 
+        # # #
+        #     cT_encoder= self._concat_hidden(encoder_state)
+        initial_decoder_state = []
+        for i in xrange(len(intention_state)):
+            b = intention_state[i]
+            c = b[0]
+            h = b[1]
+
+            Dh = tf.tanh(tf.matmul(h, self.I_I))
+            initial_decoder_state.append(tf.contrib.rnn.LSTMStateTuple(c, Dh))
+        # #     intention_states.append(intention_hidden_state)
+        #     intention_state = self.intention_state
+        #     for encoder_step_hidden_state in hidden_states:
+        #         intention_output, intention_state = self.intention_cell(encoder_step_hidden_state, intention_state)
+        # # intention_state = self.intention_state
+
+        # self.modified = []
+        # for layer in xrange(len(encoder_state)):
+        #     layer_intention_state = encoder_state[layer]
+        #     layer_last_encoder_state = self.encoder_state[layer]
+        #     h = layer_intention_state[1]
+        #     c = layer_intention_state[0]
+        #     eh = layer_last_encoder_state[1]
+        #     ec = layer_last_encoder_state[0]
+        #     self.kernel_i = tf.add(tf.matmul(h, self.I_I), self.intention_to_decoder_b)
+        #     self.kernel_e = tf.add(tf.matmul(eh, self.I_E), self.encoder_to_intention_b)
+        #     self.h_ = tf.concat([self.kernel_e, self.kernel_i], axis=1)
+        #     cc = tf.concat([c, ec], axis=1)
+        #     layer = tf.contrib.rnn.LSTMStateTuple(cc, self.h_)
+        #     self.modified.append(layer)
+
+        #
         with tf.variable_scope("decoder") as scope:
             if self.TRAINABLE:
-                self.decoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
-                self.decoder_state = self.get_state_variables(self.batch_size, self.decoder_cell)
                 decoder_embedding_vectors = tf.nn.embedding_lookup(self.embedding, self.decoder_inputs)
                 for time_step in xrange(self.DECODER_NUM_STEPS):
                     if time_step > 0:
@@ -184,7 +209,7 @@ class AttentionSortModel:
                         '''
                         plugin the intention state here!!!
                         '''
-                        decoder_state = self.encoder_state
+                        decoder_state = initial_decoder_state
 
                     # attended = decoder_state
                     # attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah, decoder_state=decoder_state)
@@ -192,27 +217,27 @@ class AttentionSortModel:
                     # LSTMStateTuple
                     decoder_output, decoder_state = self.decoder_cell(decoder_embedding_vectors[:, time_step, :], decoder_state)
                     self.decoder_outputs.append(decoder_output)
-            else:
-                gen_decoder_input = tf.constant(self.EOS, shape=(1, 1), dtype=tf.int32)
-                for time_step in xrange(self.DECODER_NUM_STEPS):
-                    if time_step > 0:
-                        tf.get_variable_scope().reuse_variables()
-                    else:
-                        decoder_state = self.decoder_state
-
-                    # attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah,
-                    #                            decoder_state=decoder_state)
-                    gen_decoder_input_vector = tf.nn.embedding_lookup(self.embedding, gen_decoder_input)
-                    decoder_output, decoder_state = self.decoder_cell(gen_decoder_input_vector[:,0,:], decoder_state)
-                    index = self._neural_decoder_output_index(decoder_output)
-                    gen_decoder_input = tf.reshape(index,[-1, 1])
-                    self.decoder_outputs.append(decoder_output)
-                    self.internal.append(gen_decoder_input)
-
-            ## update states for next batch: decoder_state, intention_state
-            # self.decoder_state_update_op = self.get_state_update_op(self.decoder_state, decoder_state)
-            # self.intention_state_update_op = self.get_state_update_op(self.intention_state, intention_state)
-            self.encoder_state_update_op = self.get_state_update_op(self.encoder_state, encoder_state)
+        #     else:
+        #         gen_decoder_input = tf.constant(self.EOS, shape=(1, 1), dtype=tf.int32)
+        #         for time_step in xrange(self.DECODER_NUM_STEPS):
+        #             if time_step > 0:
+        #                 tf.get_variable_scope().reuse_variables()
+        #             else:
+        #                 decoder_state = self.decoder_state
+        #
+        #             # attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah,
+        #             #                            decoder_state=decoder_state)
+        #             gen_decoder_input_vector = tf.nn.embedding_lookup(self.embedding, gen_decoder_input)
+        #             decoder_output, decoder_state = self.decoder_cell(gen_decoder_input_vector[:,0,:], decoder_state)
+        #             index = self._neural_decoder_output_index(decoder_output)
+        #             gen_decoder_input = tf.reshape(index,[-1, 1])
+        #             self.decoder_outputs.append(decoder_output)
+        #             self.internal.append(gen_decoder_input)
+        #
+        #     ## update states for next batch: decoder_state, intention_state
+        #     # self.decoder_state_update_op = self.get_state_update_op(self.decoder_state, decoder_state)
+            self.intention_state_update_op = self.get_state_update_op(self.intention_state, intention_state)
+            self.encoder_state_update_op = self.get_state_update_op(self.encoder_state, decoder_state)
 
             ## reset op whenever a new turn begins
             # self.reset_decoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell,
@@ -254,6 +279,12 @@ class AttentionSortModel:
     def _build_hidden(self, encoder_state):
         return encoder_state[self.N_LAYER - 1][1]
 
+    def _concat_hidden(self, encoder_state):
+        states = []
+        for h in encoder_state:
+            states.append(h[1])
+        return tf.reshape(tf.stack(states), [-1, self.N_LAYER * self.HIDDEN_UNIT])
+
     ## map decoder_output back to decoder_input(the index)
     ## this function is used when decoder inputs aren't given
     def _neural_decoder_output_index(self, decoder_output):
@@ -285,7 +316,7 @@ class AttentionSortModel:
         self.predictions_ = [tf.argmax(logit, axis=1) for logit in self.logits_]
 
     def _create_optimizer(self):
-        self.optimizer = tf.train.AdamOptimizer(1e-4).minimize(self.loss)
+        self.optimizer = tf.train.AdamOptimizer(1e-3).minimize(self.loss)
 
     def _summary(self):
         self.merged = tf.summary.merge_all()
@@ -349,11 +380,11 @@ def gen_triple(sum_ = 0):
     sum_ = sum_ % (AttentionSortModel.VOL_SIZE - 2)
     next_sum = next_sum % (AttentionSortModel.VOL_SIZE - 2)
     label.append(one_hot_triple(int(sum_)))
-    _output = np.array([AttentionSortModel.EOS, sum_ % (AttentionSortModel.VOL_SIZE - 2)])
+    label.append(one_hot_triple(int(next_sum)))
+    _output = np.array([AttentionSortModel.EOS, sum_, next_sum])
 
     label.append(one_hot_triple(AttentionSortModel.EOS))
 
-    # _output = np.append(AttentionSortModel.EOS, _output)
     return _input, _output, label, next_sum
 
 def sort_and_sum_op_data(batch_size = AttentionSortModel.batch_size):
@@ -397,26 +428,30 @@ def train():
                                            model.decoder_inputs.name: stdi,\
                                            model.labels_.name: stl})
 
-            if (i + 1) % 1 == 0:
-                loss1,p,c = sess.run(
-                    [model.loss,model.predictions_,model.labels_],
+            if (i + 1) % 10 == 0:
+                loss, predictions, c= sess.run(
+                    [model.loss, model.predictions_, model.labels_],
                     feed_dict={model.encoder_inputs.name: stei, \
                                model.decoder_inputs.name: stdi, \
                                model.labels_.name: stl})
                 all_loss_index += 1
-                all_loss[all_loss_index % 10] = loss1
+                # all_loss[all_loss_index % 10] = loss1
 
                 # writer.add_summary(summary, i)
-                print("step and turn-1", i, stei, stdi, loss1, p, c)
+                print("step and turn-1", i, stei, stdi, loss, predictions, c)
+                # ki, ke, kh, dd, ii = sess.run([model.kernel_e, model.kernel_i, model.h_, model.dd, model.modified], feed_dict={model.encoder_inputs.name: stei, \
+                #                model.decoder_inputs.name: stdi, \
+                #                model.labels_.name: stl})
+                # print(ki, ke, kh, dd, ii)
                 # if np.average(all_loss) < 0.01:
                 #     print('saving_model...', loss1)
                 #     saver.save(sess, "../model/rnn/awi", global_step=i)
 
-            sess.run([model.encoder_state_update_op],
+            sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: stei, \
                                 model.decoder_inputs.name: stdi})
-            # turn = turn + 1
             i = i + 1
+            model.increment_turn()
 
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """

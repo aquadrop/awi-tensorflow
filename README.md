@@ -29,7 +29,20 @@ b. https://arxiv.org/pdf/1412.7449.pdf section 2.1
    3,4--> 3
    2,2--> 2
    '''
-8. awi_seq2seq develops attention-with-intention model. The task is to compute sort appended with sum%vol
+8. HRED  Hierarchical Recurrent Encoder-Decoder network. Finally after about 30K iterations the model converges !!
+'''
+step and turn-1 328049 [[0 5]] [[ 6.  1.  0.]] 1.19209e-07 [array([1]), array([0]), array([6])] [[[ 0.  1.  0.  0.  0.  0.  0.]
+  [ 1.  0.  0.  0.  0.  0.  0.]
+  [ 0.  0.  0.  0.  0.  0.  1.]]]
+step and turn-1 328059 [[3 3]] [[ 6.  3.  1.]] 7.6292e-05 [array([3]), array([1]), array([6])] [[[ 0.  0.  0.  1.  0.  0.  0.]
+  [ 0.  1.  0.  0.  0.  0.  0.]
+  [ 0.  0.  0.  0.  0.  0.  1.]]]
+step and turn-1 328069 [[2 3]] [[ 6.  0.  0.]] 3.82655e-05 [array([0]), array([0]), array([6])] [[[ 1.  0.  0.  0.  0.  0.  0.]
+  [ 1.  0.  0.  0.  0.  0.  0.]
+  [ 0.  0.  0.  0.  0.  0.  1.]]]
+step and turn-1 328079 [[1 4]] [[ 6.  1.  0.]] 4.76836e-06 [array([1]), array([0]), array([6])] [[[ 0.  1.  0.  0.  0.  0.  0.]
+'''
+9. awi_seq2seq develops attention-with-intention model. The task is to compute sort appended with sum%vol
 
    Task example:
    seq1: 2,1,3 --> 1,2,3,1 the last number is (2+1+3)%5
