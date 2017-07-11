@@ -41,6 +41,8 @@ step and turn-1 328069 [[2 3]] [[ 6.  0.  0.]] 3.82655e-05 [array([0]), array([0
   [ 1.  0.  0.  0.  0.  0.  0.]
   [ 0.  0.  0.  0.  0.  0.  1.]]]
 step and turn-1 328079 [[1 4]] [[ 6.  1.  0.]] 4.76836e-06 [array([1]), array([0]), array([6])] [[[ 0.  1.  0.  0.  0.  0.  0.]
+
+Note that the print step is 10, therefore the second value does not repsond to the last printed one...
 '''
 9. awi_seq2seq develops attention-with-intention model. The task is to compute sort appended with sum%vol
 

@@ -490,9 +490,9 @@ def run_sort():
     return 0
 
 if __name__ == "__main__":
-    # gen = sort_and_sum_op_data()
-    # for a,b,c in gen:
-    #     print(a,b,c)
+    gen = sort_and_sum_op_data()
+    for a,b,c in gen:
+        print(a,b,c)
 
     train()
     # run_sort()
