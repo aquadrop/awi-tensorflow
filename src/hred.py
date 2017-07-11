@@ -85,11 +85,14 @@ class AttentionSortModel:
         # return tf.contrib.rnn.MultiRNNCell(cells)
 
     def _create_placeholder(self):
-        self.labels_ = tf.placeholder(tf.float32, shape=(None, self.DECODER_SEQ_LENGTH, self.VOL_SIZE))
+        # self.labels_ = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH))
+        self.labels_ = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH, self.VOL_SIZE))
         with tf.variable_scope("encoder") as scope:
             self.encoder_inputs = tf.placeholder(tf.int32, shape=(None, self.ENCODER_SEQ_LENGTH), name="encoder_inputs")
         with tf.variable_scope("decoder") as scope:
             self.decoder_inputs = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH), name="decoder_inputs")
+
+        self.mask = tf.placeholder(tf.float32, shape=(None, self.DECODER_SEQ_LENGTH), name="mask")
 
     def init_state(self, cell, batch_size):
         if self.TRAINABLE:
@@ -308,6 +311,8 @@ class AttentionSortModel:
             loss = loss + cross_entropy
 
         self.loss = loss
+        # logits_ = tf.reshape(tf.stack(self.logits_), shape=(self.batch_size, self.DECODER_SEQ_LENGTH, self.VOL_SIZE))
+        # self.loss = tf.contrib.seq2seq.sequence_loss(logits_, self.labels_, self.mask)
 
         # ## reset loss op
         # self.reset_loss_op = tf.assign(self.loss, [0])
@@ -361,11 +366,11 @@ class AttentionSortModel:
         self._create_optimizer()
         self._summary()
 
-def one_hot_triple(index):
-    zeros_a = np.zeros(AttentionSortModel.VOL_SIZE, dtype=np.float32)
-    zeros_a[index] = 1
-    return zeros_a
 
+def one_hot_triple(ii):
+    zeros_a = np.zeros(AttentionSortModel.VOL_SIZE, dtype=np.float32)
+    zeros_a[ii] = 1
+    return zeros_a
 
 def gen_triple(sum_ = 0):
     _input = np.random.random_integers(low=0, high=AttentionSortModel.VOL_SIZE - 2, size=AttentionSortModel.ENCODER_SEQ_LENGTH)
@@ -408,6 +413,10 @@ def sort_and_sum_op_data(batch_size = AttentionSortModel.batch_size):
             # turn_dialog.append([stei, stdi, stl])
         yield stei, stdi, stl
 
+def create_mask():
+    mask = np.ones(shape=(AttentionSortModel.batch_size, AttentionSortModel.DECODER_SEQ_LENGTH), dtype=np.int32)
+    return np.array(mask)
+
 def train():
 
     model = AttentionSortModel()
@@ -423,6 +432,7 @@ def train():
         i = 0
         all_loss = np.ones(10)
         all_loss_index = 0
+        mask = create_mask()
         for stei, stdi, stl in gen:
             model.optimizer.run(feed_dict={model.encoder_inputs.name: stei,\
                                            model.decoder_inputs.name: stdi,\
@@ -490,9 +500,9 @@ def run_sort():
     return 0
 
 if __name__ == "__main__":
-    gen = sort_and_sum_op_data()
-    for a,b,c in gen:
-        print(a,b,c)
+    # gen = sort_and_sum_op_data()
+    # for a,b,c in gen:
+    #     print(a,b,c)
 
     train()
     # run_sort()
