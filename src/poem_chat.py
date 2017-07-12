@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """ A neural chatbot using sequence to sequence model with
 attentional decoder.
 
@@ -37,16 +40,19 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
 
+reload(sys)
+sys.setdefaultencoding("utf-8")
+
 class AttentionSortModel:
 
     batch_size = 1
 
-    VOL_SIZE = 7
+    VOL_SIZE = -1
     EOS = VOL_SIZE - 1
-    EMBEDDING_SIZE = 10
-    ENCODER_SEQ_LENGTH = 2
+    EMBEDDING_SIZE = 128
+    ENCODER_SEQ_LENGTH = 5
     ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
-    DECODER_SEQ_LENGTH =  3  ## plus 0 EOS
+    DECODER_SEQ_LENGTH =  ENCODER_NUM_STEPS + 1  ## plus 1 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
     # TURN_LENGTH = 3
 
@@ -361,6 +367,26 @@ class AttentionSortModel:
         self._create_optimizer()
         self._summary()
 
+def build_dic():
+    set_ = set()
+    with open('./poem.txt', 'r') as f:
+        for line in f:
+            line = line.decode('utf-8')
+            for cc in line:
+                # cc = cc.encode('utf-8')
+                set_.add(cc)
+
+        print('built size of ', len(set_), ' dictionary')
+    chars = []
+    dic = {}
+
+    index = 0
+    for char in set_:
+        chars.append(char)
+        dic[char] = index
+        index = index + 1
+    return chars, dic
+
 def one_hot_triple(index):
     zeros_a = np.zeros(AttentionSortModel.VOL_SIZE, dtype=np.float32)
     zeros_a[index] = 1
@@ -387,7 +413,7 @@ def gen_triple(sum_ = 0):
 
     return _input, _output, label, next_sum
 
-def sort_and_sum_op_data(batch_size = AttentionSortModel.batch_size):
+def get_batch_data(batch_size = AttentionSortModel.batch_size):
     batch_sum_ = np.zeros(batch_size)
     while True:
         # turn_dialog = []
