@@ -367,53 +367,74 @@ class AttentionSortModel:
         self._create_optimizer()
         self._summary()
 
-def build_dic():
-    set_ = set()
-    with open('./poem.txt', 'r') as f:
-        for line in f:
-            line = line.decode('utf-8')
-            for cc in line:
-                # cc = cc.encode('utf-8')
-                set_.add(cc)
+class Config:
 
-        print('built size of ', len(set_), ' dictionary')
-    chars = []
-    dic = {}
+    batch_size = 1
 
-    index = 0
-    for char in set_:
-        chars.append(char)
-        dic[char] = index
-        index = index + 1
-    return chars, dic
+    VOL_SIZE = -1
+    EOS = VOL_SIZE - 1
+    EMBEDDING_SIZE = 128
+    ENCODER_SEQ_LENGTH = 5
+    ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
+    DECODER_SEQ_LENGTH = ENCODER_NUM_STEPS + 1  ## plus 1 EOS
+    DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
 
-def one_hot_triple(index):
-    zeros_a = np.zeros(AttentionSortModel.VOL_SIZE, dtype=np.float32)
-    zeros_a[index] = 1
-    return zeros_a
+    def __init__(self):
+        print('building volcabulary')
+        self._build_dic()
 
+    def _build_dic(self):
+        set_ = set()
+        with open('./poem.txt', 'r') as f:
+            for line in f:
+                line = line.decode('utf-8')
+                for cc in line:
+                    # cc = cc.encode('utf-8')
+                    set_.add(cc)
 
-def gen_triple(file_, dic):
-    with open(file_, 'rb') as f:
+            print('built size of ', len(set_), ' dictionary')
+        self.chars = []
+        self.dic = {}
+
+        index = 0
+        for char in set_:
+            self.chars.append(char)
+            self.dic[char] = index
+            index = index + 1
+        self.chars.append('#EOS#')
+        self.dic['#EOS#'] = index
+
+    def gen_triple(self, file_):
+        with open(file_, 'rb') as f:
+            while True:
+                source = f.readline()
+                target = f.readline()
+
+                source_index = []
+                for c in source:
+                    source_index.append(self.dic[c])
+                target_index = []
+                label_index = []
+                for c in target:
+                    target_index.append(self.dic[c])
+                    label_index.append(self.dic[c])
+
+                encoder_input = np.array(source_index)
+                decoder_input = np.array(target_index)
+                labels = np.array(label_index)
+
+                ## append EOS to decoder
+                decoder_input = np.append(Config.EOS, decoder_input)
+                labels = np.append(labels, Config.EOS)
+
+                yield encoder_input, decoder_input, labels
+
+    def get_batch_data(self, file_, batch_size=AttentionSortModel.batch_size):
+        triple = self.gen_triple(file_)
         while True:
-            source = f.readline()
-            target = f.readline()
-
-            source_index = []
-            for c in source:
-                source_index.append(dic[c])
-            target_index = []
-            label_index = []
-            for c in target:
-                target_index.append(dic[c])
-                label_index.append(dic[c])
-            yield source_index, target_index, label_index
+            source =
 
 
-def get_batch_data(file_, batch_size = AttentionSortModel.batch_size):
-    triple = gen_triple(file_)
-    while True:
-        source =
 
 
 def train():
