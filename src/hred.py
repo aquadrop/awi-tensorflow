@@ -86,7 +86,7 @@ class AttentionSortModel:
 
     def _create_placeholder(self):
         # self.labels_ = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH))
-        self.labels_ = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH, self.VOL_SIZE))
+        self.labels_ = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH))
         with tf.variable_scope("encoder") as scope:
             self.encoder_inputs = tf.placeholder(tf.int32, shape=(None, self.ENCODER_SEQ_LENGTH), name="encoder_inputs")
         with tf.variable_scope("decoder") as scope:
@@ -305,9 +305,9 @@ class AttentionSortModel:
             decoder_output = self.decoder_outputs[time_step]
             logits_series = tf.matmul(decoder_output, self.softmax_w) + self.softmax_b  # Broadcasted addition
             self.logits_.append(tf.nn.softmax(logits_series))
-            y_ = self.labels_[:, time_step, :]
+            y_ = self.labels_[:, time_step]
             cross_entropy = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
+                tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
             loss = loss + cross_entropy
 
         self.loss = loss
@@ -384,11 +384,11 @@ def gen_triple(sum_ = 0):
         next_sum = next_sum + o
     sum_ = sum_ % (AttentionSortModel.VOL_SIZE - 2)
     next_sum = next_sum % (AttentionSortModel.VOL_SIZE - 2)
-    label.append(one_hot_triple(int(sum_)))
-    label.append(one_hot_triple(int(next_sum)))
+    label.append(int(sum_))
+    label.append(int(next_sum))
     _output = np.array([AttentionSortModel.EOS, sum_, next_sum])
 
-    label.append(one_hot_triple(AttentionSortModel.EOS))
+    label.append(AttentionSortModel.EOS)
 
     return _input, _output, label, next_sum
 
