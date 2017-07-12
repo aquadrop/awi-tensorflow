@@ -393,46 +393,23 @@ def one_hot_triple(index):
     return zeros_a
 
 
-def gen_triple(sum_ = 0):
-    _input = np.random.random_integers(low=0, high=AttentionSortModel.VOL_SIZE - 2, size=AttentionSortModel.ENCODER_SEQ_LENGTH)
-    # _output = np.sort(_input)
+def gen_triple(file_):
+    with open(file_, 'rb') as f:
+        count = 0
+        source = ''
+        target = ''
+        for line in f:
+            if count == 0:
+                source = line
+                count = 1
+            if count == 1:
+                pass
 
-    label = []
-    next_sum = 0
-    ## and compute sum
-    for o in _input:
-        # label.append(one_hot_triple(o))
-        next_sum = next_sum + o
-    sum_ = sum_ % (AttentionSortModel.VOL_SIZE - 2)
-    next_sum = next_sum % (AttentionSortModel.VOL_SIZE - 2)
-    label.append(one_hot_triple(int(sum_)))
-    label.append(one_hot_triple(int(next_sum)))
-    _output = np.array([AttentionSortModel.EOS, sum_, next_sum])
-
-    label.append(one_hot_triple(AttentionSortModel.EOS))
-
-    return _input, _output, label, next_sum
-
-def get_batch_data(batch_size = AttentionSortModel.batch_size):
-    batch_sum_ = np.zeros(batch_size)
+def get_batch_data(file_, batch_size = AttentionSortModel.batch_size):
+    triple = gen_triple(file_)
     while True:
-        # turn_dialog = []
-        # for turn in xrange(AttentionSortModel.TURN_LENGTH):
-        single_turn_encoder_inputs = []
-        single_turn_decoder_inputs = []
-        single_turn_labels = []
-        for batch_index in xrange(batch_size):
-            encoder_input, decoder_input, label, sum_ = gen_triple(sum_=batch_sum_[batch_index])
-            batch_sum_[batch_index] = sum_
-            single_turn_encoder_inputs.append(encoder_input)
-            single_turn_decoder_inputs.append(decoder_input)
-            single_turn_labels.append(label)
-        stei = np.array(single_turn_encoder_inputs).reshape(batch_size, AttentionSortModel.ENCODER_NUM_STEPS)
-        stdi = np.array(single_turn_decoder_inputs).reshape(batch_size, AttentionSortModel.DECODER_NUM_STEPS)
-        stl = np.array(single_turn_labels)
+        source =
 
-            # turn_dialog.append([stei, stdi, stl])
-        yield stei, stdi, stl
 
 def train():
 
