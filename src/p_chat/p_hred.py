@@ -414,9 +414,8 @@ def train():
                 #                model.decoder_inputs.name: stdi, \
                 #                model.labels_.name: stl})
                 # print(ki, ke, kh, dd, ii)
-                # if np.average(all_loss) < 0.01:
-                #     print('saving_model...', loss1)
-                #     saver.save(sess, "../model/rnn/awi", global_step=i)
+                if np.average(loss) < 0.01:
+                    saver.save(sess, "../../model/rnn/p_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: stei, \
