@@ -85,11 +85,12 @@ class AttentionSortModel:
         # return tf.contrib.rnn.MultiRNNCell(cells)
 
     def _create_placeholder(self):
-        self.labels_ = tf.placeholder(tf.float32, shape=(None, self.DECODER_SEQ_LENGTH, self.VOL_SIZE))
+        self.labels_ = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH))
         with tf.variable_scope("encoder") as scope:
             self.encoder_inputs = tf.placeholder(tf.int32, shape=(None, self.ENCODER_SEQ_LENGTH), name="encoder_inputs")
         with tf.variable_scope("decoder") as scope:
             self.decoder_inputs = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH), name="decoder_inputs")
+        self.mask = tf.placeholder(tf.float32, shape=(None, self.DECODER_SEQ_LENGTH), name="mask")
 
     def init_state(self, cell, batch_size):
         if self.TRAINABLE:
@@ -262,7 +263,7 @@ class AttentionSortModel:
 
         e_iJ = tf.stack(e_iJ)
         a_iJ = tf.reshape(tf.nn.softmax(e_iJ, dim=0), [-1, 1, self.ENCODER_NUM_STEPS])
-        encoder_hidden_states = tf.reshape(encoder_hidden_states, [-1, self.ENCODER_NUM_STEPS, self.HIDDEN_UNIT])
+        encoder_hidden_states = tf.transpose(encoder_hidden_states, [1, 0, 2])
         c_i = tf.matmul(a_iJ, encoder_hidden_states)
 
         attention = c_i
@@ -298,17 +299,20 @@ class AttentionSortModel:
         # self.loss = tf.get_variable('loss', dtype=tf.float32, trainable=False,shape=[1])
         self.logits_ = []
         loss = 0
+        logits = []
         for time_step in xrange(self.DECODER_NUM_STEPS):
             decoder_output = self.decoder_outputs[time_step]
             logits_series = tf.matmul(decoder_output, self.softmax_w) + self.softmax_b  # Broadcasted addition
             self.logits_.append(tf.nn.softmax(logits_series))
-            y_ = self.labels_[:, time_step, :]
-            cross_entropy = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
-            loss = loss + cross_entropy
+            logits.append(logits_series)
+            # y_ = self.labels_[:, time_step]
+            # cross_entropy = tf.reduce_mean(
+            #     tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
+            # loss = loss + cross_entropy
 
-        self.loss = loss
-
+        # self.loss = loss
+        logits_ = tf.transpose(tf.stack(logits), [1, 0, 2])
+        self.loss = tf.contrib.seq2seq.sequence_loss(logits_, self.labels_, self.mask)
         # ## reset loss op
         # self.reset_loss_op = tf.assign(self.loss, [0])
         # self.plus_loss_op = tf.add(self.loss, [loss])
@@ -361,6 +365,10 @@ class AttentionSortModel:
         self._create_optimizer()
         self._summary()
 
+def create_mask():
+    mask = np.ones(shape=(AttentionSortModel.batch_size, AttentionSortModel.DECODER_SEQ_LENGTH), dtype=np.int32)
+    return np.array(mask)
+
 def one_hot_triple(index):
     zeros_a = np.zeros(AttentionSortModel.VOL_SIZE, dtype=np.float32)
     zeros_a[index] = 1
@@ -379,11 +387,11 @@ def gen_triple(sum_ = 0):
         next_sum = next_sum + o
     sum_ = sum_ % (AttentionSortModel.VOL_SIZE - 2)
     next_sum = next_sum % (AttentionSortModel.VOL_SIZE - 2)
-    label.append(one_hot_triple(int(sum_)))
-    label.append(one_hot_triple(int(next_sum)))
+    label.append(int(sum_))
+    label.append(int(next_sum))
     _output = np.array([AttentionSortModel.EOS, sum_, next_sum])
 
-    label.append(one_hot_triple(AttentionSortModel.EOS))
+    label.append(AttentionSortModel.EOS)
 
     return _input, _output, label, next_sum
 
@@ -423,17 +431,20 @@ def train():
         i = 0
         all_loss = np.ones(10)
         all_loss_index = 0
+        mask = create_mask()
         for stei, stdi, stl in gen:
             model.optimizer.run(feed_dict={model.encoder_inputs.name: stei,\
                                            model.decoder_inputs.name: stdi,\
-                                           model.labels_.name: stl})
+                                           model.labels_.name: stl,
+                                           model.mask.name: mask})
 
             if (i + 1) % 1 == 0:
                 loss, predictions, c= sess.run(
                     [model.loss, model.predictions_, model.labels_],
                     feed_dict={model.encoder_inputs.name: stei, \
                                model.decoder_inputs.name: stdi, \
-                               model.labels_.name: stl})
+                               model.labels_.name: stl,
+                               model.mask.name: mask})
                 all_loss_index += 1
                 # all_loss[all_loss_index % 10] = loss1
 
@@ -449,7 +460,8 @@ def train():
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: stei, \
-                                model.decoder_inputs.name: stdi})
+                                model.decoder_inputs.name: stdi,
+                                model.mask.name: mask})
             i = i + 1
             model.increment_turn()
 
