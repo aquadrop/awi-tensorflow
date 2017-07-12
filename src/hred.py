@@ -428,7 +428,7 @@ def train():
                                            model.decoder_inputs.name: stdi,\
                                            model.labels_.name: stl})
 
-            if (i + 1) % 10 == 0:
+            if (i + 1) % 1 == 0:
                 loss, predictions, c= sess.run(
                     [model.loss, model.predictions_, model.labels_],
                     feed_dict={model.encoder_inputs.name: stei, \
