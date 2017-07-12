@@ -393,17 +393,22 @@ def one_hot_triple(index):
     return zeros_a
 
 
-def gen_triple(file_):
+def gen_triple(file_, dic):
     with open(file_, 'rb') as f:
-        count = 0
-        source = ''
-        target = ''
-        for line in f:
-            if count == 0:
-                source = line
-                count = 1
-            if count == 1:
-                pass
+        while True:
+            source = f.readline()
+            target = f.readline()
+
+            source_index = []
+            for c in source:
+                source_index.append(dic[c])
+            target_index = []
+            label_index = []
+            for c in target:
+                target_index.append(dic[c])
+                label_index.append(dic[c])
+            yield source_index, target_index, label_index
+
 
 def get_batch_data(file_, batch_size = AttentionSortModel.batch_size):
     triple = gen_triple(file_)
