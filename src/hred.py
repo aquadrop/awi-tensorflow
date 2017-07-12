@@ -316,7 +316,7 @@ class AttentionSortModel:
         self.predictions_ = [tf.argmax(logit, axis=1) for logit in self.logits_]
 
     def _create_optimizer(self):
-        self.optimizer = tf.train.AdamOptimizer(1e-3).minimize(self.loss)
+        self.optimizer = tf.train.AdamOptimizer(1e-4).minimize(self.loss)
 
     def _summary(self):
         self.merged = tf.summary.merge_all()
