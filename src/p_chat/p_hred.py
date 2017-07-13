@@ -413,8 +413,8 @@ def train():
                 predictions = np.reshape(np.array(predictions), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
                 stei_ = np.reshape(np.array(stei), [AttentionSortModel.batch_size, AttentionSortModel.ENCODER_NUM_STEPS])
                 stdi_ = np.reshape(np.array(stdi), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
-                if loss < 0.3:
-                    print("step and turn-1", i, config.recover(stei_[0]), config.recover(stdi_[0]), loss, predictions, c[0])
+                # if loss < 0.3:
+                print("step and turn-1", i, config.recover(stei_[0]), config.recover(stdi_[0]), loss, config.recover(predictions[0]), c[0])
                 # ki, ke, kh, dd, ii = sess.run([model.kernel_e, model.kernel_i, model.h_, model.dd, model.modified], feed_dict={model.encoder_inputs.name: stei, \
                 #                model.decoder_inputs.name: stdi, \
                 #                model.labels_.name: stl})
@@ -422,6 +422,9 @@ def train():
                 if loss < max_loss:
                     max_loss = loss
                     print('saving model...', i, loss)
+                    saver.save(sess, "../../model/rnn/p_hred", global_step=i)
+                if i % 1000 == 0:
+                    print('safe_mode saving model...', i, loss)
                     saver.save(sess, "../../model/rnn/p_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
