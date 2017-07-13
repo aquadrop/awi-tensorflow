@@ -390,8 +390,6 @@ def train():
         all_loss_index = 0
         mask = create_mask()
         for stei, stdi, stl in gen:
-            if len(stei) == 0:
-                continue
             model.optimizer.run(feed_dict={model.encoder_inputs.name: stei,\
                                            model.decoder_inputs.name: stdi,\
                                            model.labels_.name: stl,
