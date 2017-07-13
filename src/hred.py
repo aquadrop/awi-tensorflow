@@ -39,7 +39,7 @@ from tensorflow.python import debug as tf_debug
 
 class AttentionSortModel:
 
-    batch_size = 1
+    batch_size = 2
 
     VOL_SIZE = 7
     EOS = VOL_SIZE - 1

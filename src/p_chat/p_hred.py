@@ -41,7 +41,7 @@ from p_config import Config
 
 class AttentionSortModel:
 
-    batch_size = 1
+    batch_size = 32
 
     EMBEDDING_SIZE = 400
     ENCODER_SEQ_LENGTH = 5
@@ -50,7 +50,7 @@ class AttentionSortModel:
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
     # TURN_LENGTH = 3
 
-    HIDDEN_UNIT = 256
+    HIDDEN_UNIT = 512
     N_LAYER = 10
 
     TRAINABLE = True
@@ -380,7 +380,7 @@ def train():
     saver = tf.train.Saver()
     with tf.Session() as sess:
         # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
-        gen = config.get_batch_data()
+        gen = config.get_batch_data(AttentionSortModel.batch_size)
         sess.run(tf.global_variables_initializer())
         writer = tf.summary.FileWriter('../log',
                                        sess.graph)
@@ -406,10 +406,10 @@ def train():
                 # all_loss[all_loss_index % 10] = loss1
 
                 # writer.add_summary(summary, i)
-                predictions = np.reshape(np.array(predictions), AttentionSortModel.DECODER_NUM_STEPS)
-                stei_ = np.reshape(np.array(stei), AttentionSortModel.ENCODER_NUM_STEPS)
-                stdi_ = np.reshape(np.array(stdi), AttentionSortModel.DECODER_NUM_STEPS)
-                print("step and turn-1", i, config.recover(stei_), config.recover(stdi_), loss, config.recover(predictions), c)
+                predictions = np.reshape(np.array(predictions), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
+                stei_ = np.reshape(np.array(stei), [AttentionSortModel.batch_size, AttentionSortModel.ENCODER_NUM_STEPS])
+                stdi_ = np.reshape(np.array(stdi), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
+                print("step and turn-1", i, config.recover(stei_[0]), config.recover(stdi_[0]), loss, config.recover(predictions[0]), c)
                 # ki, ke, kh, dd, ii = sess.run([model.kernel_e, model.kernel_i, model.h_, model.dd, model.modified], feed_dict={model.encoder_inputs.name: stei, \
                 #                model.decoder_inputs.name: stdi, \
                 #                model.labels_.name: stl})

@@ -45,8 +45,6 @@ sys.setdefaultencoding("utf-8")
 
 class Config:
 
-    batch_size = 1
-
     EMBEDDING_SIZE = 128
     ENCODER_SEQ_LENGTH = 5
     ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
@@ -115,20 +113,21 @@ class Config:
         # print(self.recover(encoder_input), self.recover(decoder_input), self.recover(labels), check, len(self.lines))
         return check, encoder_input, decoder_input, labels
 
-    def get_batch_data(self):
+    def get_batch_data(self, batch_size):
         check = 0
         while True:
             encoder_inputs = []
             decoder_inputs = []
             labels = []
-            for bb in xrange(self.batch_size):
-                check, a, b, c = self.gen_triple(check)
+            for bb in xrange(batch_size):
+                pad = bb * (batch_size - 1) * 2
+                check, a, b, c = self.gen_triple(check + pad)
                 encoder_inputs.append(a)
                 decoder_inputs.append(b)
                 labels.append(c)
-                encoder_inputs = np.array(encoder_inputs)
-                decoder_inputs = np.array(decoder_inputs)
-                labels = np.array(labels)
+            encoder_inputs = np.array(encoder_inputs)
+            decoder_inputs = np.array(decoder_inputs)
+            labels = np.array(labels)
             yield encoder_inputs, decoder_inputs, labels
 
     def recover(self, index):
@@ -140,5 +139,5 @@ class Config:
 if __name__ == '__main__':
     config = Config('../../data/poem.txt')
     # with open('../../data/log.txt', 'w') as log_:
-    for a, b, c in config.get_batch_data():
+    for a, b, c in config.get_batch_data(2):
         print(config.recover(a[0]) + config.recover(b[0]) + config.recover(c[0]))
