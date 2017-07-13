@@ -409,7 +409,7 @@ def train():
                 predictions = np.reshape(np.array(predictions), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
                 stei_ = np.reshape(np.array(stei), [AttentionSortModel.batch_size, AttentionSortModel.ENCODER_NUM_STEPS])
                 stdi_ = np.reshape(np.array(stdi), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
-                print("step and turn-1", i, config.recover(stei_[0]), config.recover(stdi_[0]), loss, config.recover(predictions[0]), c)
+                print("step and turn-1", i, config.recover(stei_[0]), config.recover(stdi_[0]), loss, config.recover(predictions[0]), c[0])
                 # ki, ke, kh, dd, ii = sess.run([model.kernel_e, model.kernel_i, model.h_, model.dd, model.modified], feed_dict={model.encoder_inputs.name: stei, \
                 #                model.decoder_inputs.name: stdi, \
                 #                model.labels_.name: stl})
