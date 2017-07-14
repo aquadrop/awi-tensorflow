@@ -436,7 +436,7 @@ def train():
 
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
-    ckpt = tf.train.get_checkpoint_state(os.path.dirname("../model/rnn/attention"))
+    ckpt = tf.train.get_checkpoint_state(os.path.dirname("../model/rnn/p_hred"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the SortBot")
         saver.restore(sess, ckpt.model_checkpoint_path)
