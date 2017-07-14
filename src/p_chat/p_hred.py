@@ -420,7 +420,7 @@ def train():
                 #                model.labels_.name: stl})
                 # print(ki, ke, kh, dd, ii)
                 if loss < max_loss:
-                    max_loss = loss
+                    max_loss = loss * 0.7
                     print('saving model...', i, loss)
                     saver.save(sess, "../../model/rnn/p_hred", global_step=i)
                 if i % 1000 == 0:
