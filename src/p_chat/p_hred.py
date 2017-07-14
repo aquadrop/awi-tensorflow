@@ -385,7 +385,7 @@ def train():
         sess.run(tf.global_variables_initializer())
         writer = tf.summary.FileWriter('../log',
                                        sess.graph)
-        # _check_restore_parameters(sess, saver)
+        _check_restore_parameters(sess, saver)
         i = 0
         all_loss = np.ones(10)
         all_loss_index = 0
