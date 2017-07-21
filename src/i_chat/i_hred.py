@@ -37,7 +37,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
 
-from p_config import Config
+from i_config import Config
 
 class AttentionSortModel:
 
@@ -50,7 +50,7 @@ class AttentionSortModel:
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
     # TURN_LENGTH = 3
 
-    HIDDEN_UNIT = 512
+    HIDDEN_UNIT = 256
     N_LAYER = 10
 
     TRAINABLE = True
@@ -309,19 +309,20 @@ class AttentionSortModel:
             logits_series = tf.matmul(decoder_output, self.softmax_w) + self.softmax_b  # Broadcasted addition
             self.logits_.append(tf.nn.softmax(logits_series))
             logits.append(logits_series)
-            # y_ = self.labels_[:, time_step]
-            # cross_entropy = tf.reduce_mean(
-            #     tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
-            # loss = loss + cross_entropy
+            y_ = self.labels_[:, time_step]
+            cross_entropy = tf.reduce_mean(
+                tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
+            loss = loss + cross_entropy
 
-        # self.loss = loss
-        logits_ = tf.transpose(tf.stack(logits), [1, 0, 2])
-        self.loss = tf.contrib.seq2seq.sequence_loss(logits_, self.labels_, self.mask)
+        self.loss = loss
+        self.logits_ = tf.transpose(tf.stack(self.logits_), [1, 0, 2])
+        lg = tf.unstack(self.logits_)
+        # self.loss = tf.contrib.seq2seq.sequence_loss(logits_, self.labels_, self.mask)
         # ## reset loss op
         # self.reset_loss_op = tf.assign(self.loss, [0])
         # self.plus_loss_op = tf.add(self.loss, [loss])
         # tf.summary.scalar("batch_loss", self.loss)
-        self.predictions_ = [tf.argmax(logit, axis=1) for logit in self.logits_]
+        self.predictions_ = [tf.argmax(logit, axis=1) for logit in lg]
 
     def _create_optimizer(self):
         self.optimizer = tf.train.AdamOptimizer(1e-4).minimize(self.loss)
@@ -374,7 +375,7 @@ def create_mask():
     return np.array(mask)
 
 def train():
-    config = Config('../../data/poem.txt')
+    config = Config('../../data/small_poem.txt')
     model = AttentionSortModel(data_config=config, trainable=True)
     model.build_graph()
     saver = tf.train.Saver()
@@ -384,20 +385,23 @@ def train():
         sess.run(tf.global_variables_initializer())
         writer = tf.summary.FileWriter('../log',
                                        sess.graph)
-        # _check_restore_parameters(sess, saver)
+        _check_restore_parameters(sess, saver)
         i = 0
         all_loss = np.ones(10)
         all_loss_index = 0
+        max_loss = 0.01
         mask = create_mask()
         for stei, stdi, stl in gen:
+            if len(stei) == 0:
+                continue
             model.optimizer.run(feed_dict={model.encoder_inputs.name: stei,\
                                            model.decoder_inputs.name: stdi,\
                                            model.labels_.name: stl,
                                            model.mask.name: mask})
 
             if (i + 1) % 1 == 0:
-                loss, predictions, c= sess.run(
-                    [model.loss, model.predictions_, model.labels_],
+                loss, predictions, logits, c= sess.run(
+                    [model.loss, model.predictions_, model.logits_, model.labels_],
                     feed_dict={model.encoder_inputs.name: stei, \
                                model.decoder_inputs.name: stdi, \
                                model.labels_.name: stl,
@@ -409,13 +413,19 @@ def train():
                 predictions = np.reshape(np.array(predictions), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
                 stei_ = np.reshape(np.array(stei), [AttentionSortModel.batch_size, AttentionSortModel.ENCODER_NUM_STEPS])
                 stdi_ = np.reshape(np.array(stdi), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
+                # if loss < 0.3:
                 print("step and turn-1", i, config.recover(stei_[0]), config.recover(stdi_[0]), loss, config.recover(predictions[0]), c[0])
                 # ki, ke, kh, dd, ii = sess.run([model.kernel_e, model.kernel_i, model.h_, model.dd, model.modified], feed_dict={model.encoder_inputs.name: stei, \
                 #                model.decoder_inputs.name: stdi, \
                 #                model.labels_.name: stl})
                 # print(ki, ke, kh, dd, ii)
-                if np.average(loss) < 0.01:
+                if loss < max_loss:
+                    max_loss = loss * 0.7
+                    print('saving model...', i, loss)
                     saver.save(sess, "../../model/rnn/p_hred", global_step=i)
+                if i % 1000 == 0:
+                    print('safe_mode saving model...', i, loss)
+                    saver.save(sess, "../../model/rnn/i_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: stei, \
@@ -426,7 +436,7 @@ def train():
 
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
-    ckpt = tf.train.get_checkpoint_state(os.path.dirname("../model/rnn/attention"))
+    ckpt = tf.train.get_checkpoint_state(os.path.dirname("../../model/rnn/i_hred"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the SortBot")
         saver.restore(sess, ckpt.model_checkpoint_path)

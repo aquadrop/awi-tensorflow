@@ -50,7 +50,7 @@ class AttentionSortModel:
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
     # TURN_LENGTH = 3
 
-    HIDDEN_UNIT = 512
+    HIDDEN_UNIT = 256
     N_LAYER = 10
 
     TRAINABLE = True
@@ -375,7 +375,7 @@ def create_mask():
     return np.array(mask)
 
 def train():
-    config = Config('../../data/poem.txt')
+    config = Config('../../data/small_poem.txt')
     model = AttentionSortModel(data_config=config, trainable=True)
     model.build_graph()
     saver = tf.train.Saver()
