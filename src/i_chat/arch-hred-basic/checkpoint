@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/deep/projects/bot/awi-tensorflow/src/i_chat/arch-hred-basic/model.ckpt"
+all_model_checkpoint_paths: "/home/deep/projects/bot/awi-tensorflow/src/i_chat/arch-hred-basic/model.ckpt"
