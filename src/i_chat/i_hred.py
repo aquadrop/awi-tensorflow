@@ -100,10 +100,10 @@ class AttentionSortModel:
         self.labels_ = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH))
         with tf.variable_scope("encoder") as scope:
             self.encoder_inputs = tf.placeholder(tf.int32, shape=(None, self.ENCODER_SEQ_LENGTH), name="encoder_inputs")
-            self.encoder_inputs_length = tf.placehoder(tf.int32, shape=[None], name="encoder_inputs_length")
+            self.encoder_inputs_length = tf.placehoder(tf.int32, shape=None, name="encoder_inputs_length")
         with tf.variable_scope("decoder") as scope:
             self.decoder_inputs = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH), name="decoder_inputs")
-            self.decoder_inputs_length = tf.placehoder(tf.int32, shape=[None], name="decoder_inputs_length")
+            self.decoder_inputs_length = tf.placehoder(tf.int32, shape=None, name="decoder_inputs_length")
         self.mask = tf.placeholder(tf.float32, shape=(None, self.DECODER_SEQ_LENGTH), name="mask")
 
     def init_state(self, cell, batch_size):
@@ -149,22 +149,32 @@ class AttentionSortModel:
 
         with tf.variable_scope("encoder") as scope:
             encoder_embedding_vectors = tf.nn.embedding_lookup(self.embedding, self.encoder_inputs)
-            # self.encoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
-            self.encoder_cell = rnn_encoder.StackBidirectionalRNNEncoder(encoder_params, self.mode)
+            encoder_fw_cell = self.stacked_rnn(self.HIDDEN_UNIT)
+            encoder_bw_cell = self.stacked_rnn(self.HIDDEN_UNIT)
+            self.encoder_initial_fw_state = self.get_state_variables(self.batch_size, encoder_fw_cell)
+            self.encoder_initial_bw_state = self.get_state_variables(self.batch_size, encoder_bw_cell)
+            ((outputs_fw, outputs_bw), (state_fw, state_bw)) = tf.nn.bidirectional_dynamic_rnn(cell_fw=encoder_fw_cell, cell_bw=encoder_bw_cell,
+                                                                inputs=encoder_embedding_vectors,
+                                                                sequence_length=self.encoder_inputs_length,
+                                                                initial_state_fw=self.encoder_initial_fw_state,
+                                                                initial_state_bw=self.encoder_initial_bw_state,
+                                                                          dtype=tf.float32)
+        encoder_final_state_c = tf.concat(
+            (state_fw[self.N_LAYER - 1][0],
+             state_bw[self.N_LAYER - 1][0]),
+            1)
 
-            self.encoder_state = self.get_state_variables(self.batch_size, self.encoder_cell)
+        encoder_final_state_h = tf.concat(
+            (state_fw[self.N_LAYER - 1][1],
+             state_bw[self.N_LAYER - 1][1]),
+            1)
 
-            # for time_step in xrange(self.ENCODER_NUM_STEPS):
-            #     if time_step > 0:
-            #         tf.get_variable_scope().reuse_variables()
-            #     else:
-            #         encoder_state = self.encoder_state
-            #     encoder_output, encoder_state = self.encoder_cell(encoder_embedding_vectors[:, time_step, :], encoder_state)
-            #     ## can be concat way
-            #     hidden_state = self._concat_hidden(encoder_state) ##
-            #     hidden_states.append(hidden_state) ## steps, (batch, hidden_unit) <-- tensor
-            encoder_output = self.encoder_cell(
-                encoder_embedding_vectors, self.encoder_inputs_length, initial_state_fw=self.encoder_state)
+        encoder_final_state = tf.nn.rnn_cell.LSTMStateTuple(
+            c=encoder_final_state_c,
+            h=encoder_final_state_h
+        )
+
+        hidden_state = tf.reshape(encoder_final_state[1], shape=(-1, self.HIDDEN_UNIT * 2))
 
         # compute U_a*h_j quote:"this vector can be pre-computed.. U_a is R^n * n, h_j is R^n"
         # U_ah = []

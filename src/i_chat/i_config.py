@@ -51,6 +51,8 @@ class Config:
     DECODER_SEQ_LENGTH = ENCODER_NUM_STEPS + 1  ## plus 1 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
 
+    TURN_NUM = 4
+
     PAD = -1
     EOS = -1
     GO = -1
@@ -67,13 +69,16 @@ class Config:
     def _build_dic(self, file_):
         set_ = set()
         lnum = 0
-        self.lines = []
+        self.sessions = []
+        lines = []
         with open(file_, 'r') as f:
             for line in f:
                 line = line.decode('utf-8').strip('\n')
                 lnum += 1
-                self.lines.append(line)
+                lines.append(line)
                 if not line:
+                    self.lines = []
+                    self.sessions.append(lines)
                     continue
                 for cc in line:
                     # cc = cc.encode('utf-8')
@@ -102,45 +107,10 @@ class Config:
 
         self.VOL_SIZE = len(self.chars)
 
-    def get_session_data(self):
-        flag = 0
-        while True:
-            encoder_inputs = []
-            decoder_inputs = []
-            labels = []
-            for line in self.lines:
-                line = line.strip('\n')
-                if not line:
-                    if len(encoder_inputs) == 0:
-                        flag == 0
-                        continue
-                    encoder_inputs = np.array(encoder_inputs)
-                    decoder_inputs = np.array(decoder_inputs)
-                    labels = np.array(labels)
-                    flag = 0
-                    yield len(encoder_inputs), encoder_inputs, decoder_inputs, labels
-                    encoder_inputs = []
-                    decoder_inputs = []
-                    labels = []
-                else:
-                    encode_input = []
-                    decoder_input = []
-                    label = []
-                    for c in line:
-                        index = self.dic[c]
-                        if flag % 2 == 0:
-                            encode_input.append(index)
-                        else:
-                            decoder_input.append(index)
-                            label.append(index)
-                    if flag % 2 == 0:
-                        encoder_inputs.append(encode_input)
-                    else:
-                        decoder_input.insert(0, self.GO)
-                        decoder_inputs.append(decoder_input)
-                        label.append(self.EOS)
-                        labels.append(label)
-                    flag += 1
+    def generate_batch_data(self, batch_size=32):
+        for i in xrange(batch_size):
+            
+
 
 
     def recover(self, index):
@@ -150,7 +120,7 @@ class Config:
         return ''.join(sentence)
 
 if __name__ == '__main__':
-    config = Config('../../data/poem.txt')
+    config = Config('../../data//business/business_sessions.txt')
     # with open('../../data/log.txt', 'w') as log_:
     batch_size = 32
     for l, a, b, c in config.get_session_data():
