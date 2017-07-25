@@ -34,8 +34,8 @@ encoder2_hidden_units = encoder1_hidden_units * 2
 decoder_hidden_units = encoder2_hidden_units
 
 import helpers as data_helpers
-batch_size = 11
-round_num = 20
+batch_size = 4
+round_num = 3
 
 # 一个generator，每次产生一个minibatch的随机样本
 
@@ -252,6 +252,7 @@ def next_feed():
             cumbatch.append(batch[i] + cumbatch[-1])
 
     encoder_inputs_, encoder1_inputs_length_ = data_helpers.batch(batch)
+    print(encoder_inputs_, encoder1_inputs_length_)
     encoder2_inputs_length_ = np.array([round_num]*batch_size)
     decoder_targets_, _ = data_helpers.batch(
         [(sequence) + [EOS] for sequence in cumbatch]

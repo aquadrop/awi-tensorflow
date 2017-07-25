@@ -37,6 +37,9 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
 
+from seq2seq.encoders import rnn_encoder
+from seq2seq.decoders import basic_decoder
+
 from i_config import Config
 
 class AttentionSortModel:
@@ -65,6 +68,11 @@ class AttentionSortModel:
         self.VOL_SIZE = self.data_config.VOL_SIZE
         self.EOS = self.data_config.EOS
 
+        if trainable:
+            self.mode = tf.contrib.learn.ModeKeys.TRAIN
+        else:
+            self.mode = tf.contrib.learn.ModeKeys.INFER
+
     def reset_turn(self):
         self.turn_index = 0
 
@@ -92,8 +100,10 @@ class AttentionSortModel:
         self.labels_ = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH))
         with tf.variable_scope("encoder") as scope:
             self.encoder_inputs = tf.placeholder(tf.int32, shape=(None, self.ENCODER_SEQ_LENGTH), name="encoder_inputs")
+            self.encoder_inputs_length = tf.placehoder(tf.int32, shape=[None], name="encoder_inputs_length")
         with tf.variable_scope("decoder") as scope:
             self.decoder_inputs = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH), name="decoder_inputs")
+            self.decoder_inputs_length = tf.placehoder(tf.int32, shape=[None], name="decoder_inputs_length")
         self.mask = tf.placeholder(tf.float32, shape=(None, self.DECODER_SEQ_LENGTH), name="mask")
 
     def init_state(self, cell, batch_size):
@@ -132,21 +142,29 @@ class AttentionSortModel:
         self.intention_to_decoder_b = self.variable(name="intention_decoder_b", shape=[self.HIDDEN_UNIT])
         # self.C = self.variable(name="attention_C", shape=[self.HIDDEN_UNIT, self.HIDDEN_UNIT])
 
+        encoder_params = rnn_encoder.StackBidirectionalRNNEncoder.default_params()
+        encoder_params["rnn_cell"]["cell_params"]["num_units"] = self.HIDDEN_UNIT
+        encoder_params["rnn_cell"]["cell_class"] = "BasicLSTMCell"
+        encoder_params["rnn_cell"]["num_layers"] = self.N_LAYER
+
         with tf.variable_scope("encoder") as scope:
             encoder_embedding_vectors = tf.nn.embedding_lookup(self.embedding, self.encoder_inputs)
-            self.encoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
+            # self.encoder_cell = self.stacked_rnn(self.HIDDEN_UNIT)
+            self.encoder_cell = rnn_encoder.StackBidirectionalRNNEncoder(encoder_params, self.mode)
 
             self.encoder_state = self.get_state_variables(self.batch_size, self.encoder_cell)
 
-            for time_step in xrange(self.ENCODER_NUM_STEPS):
-                if time_step > 0:
-                    tf.get_variable_scope().reuse_variables()
-                else:
-                    encoder_state = self.encoder_state
-                encoder_output, encoder_state = self.encoder_cell(encoder_embedding_vectors[:, time_step, :], encoder_state)
-                ## can be concat way
-                hidden_state = self._concat_hidden(encoder_state) ##
-                hidden_states.append(hidden_state) ## steps, (batch, hidden_unit) <-- tensor
+            # for time_step in xrange(self.ENCODER_NUM_STEPS):
+            #     if time_step > 0:
+            #         tf.get_variable_scope().reuse_variables()
+            #     else:
+            #         encoder_state = self.encoder_state
+            #     encoder_output, encoder_state = self.encoder_cell(encoder_embedding_vectors[:, time_step, :], encoder_state)
+            #     ## can be concat way
+            #     hidden_state = self._concat_hidden(encoder_state) ##
+            #     hidden_states.append(hidden_state) ## steps, (batch, hidden_unit) <-- tensor
+            encoder_output = self.encoder_cell(
+                encoder_embedding_vectors, self.encoder_inputs_length, initial_state_fw=self.encoder_state)
 
         # compute U_a*h_j quote:"this vector can be pre-computed.. U_a is R^n * n, h_j is R^n"
         # U_ah = []
