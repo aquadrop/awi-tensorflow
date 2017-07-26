@@ -97,14 +97,14 @@ class AttentionSortModel:
         # return tf.contrib.rnn.MultiRNNCell(cells)
 
     def _create_placeholder(self):
-        self.labels_ = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH))
+        self.labels_ = tf.placeholder(tf.int32, shape=(None, None))
         with tf.variable_scope("encoder") as scope:
-            self.encoder_inputs = tf.placeholder(tf.int32, shape=(None, self.ENCODER_SEQ_LENGTH), name="encoder_inputs")
-            self.encoder_inputs_length = tf.placehoder(tf.int32, shape=None, name="encoder_inputs_length")
+            self.encoder_inputs = tf.placeholder(tf.int32, shape=(None, None), name="encoder_inputs")
+            self.encoder_inputs_length = tf.placeholder(tf.int32, shape=None, name="encoder_inputs_length")
         with tf.variable_scope("decoder") as scope:
-            self.decoder_inputs = tf.placeholder(tf.int32, shape=(None, self.DECODER_SEQ_LENGTH), name="decoder_inputs")
-            self.decoder_inputs_length = tf.placehoder(tf.int32, shape=None, name="decoder_inputs_length")
-        self.mask = tf.placeholder(tf.float32, shape=(None, self.DECODER_SEQ_LENGTH), name="mask")
+            self.decoder_inputs = tf.placeholder(tf.int32, shape=(None, None), name="decoder_inputs")
+            self.decoder_inputs_length = tf.placeholder(tf.int32, shape=None, name="decoder_inputs_length")
+        # self.mask = tf.placeholder(tf.float32, shape=(None, self.DECODER_SEQ_LENGTH), name="mask")
 
     def init_state(self, cell, batch_size):
         if self.TRAINABLE:
@@ -235,21 +235,27 @@ class AttentionSortModel:
         with tf.variable_scope("decoder") as scope:
             if self.TRAINABLE:
                 decoder_embedding_vectors = tf.nn.embedding_lookup(self.embedding, self.decoder_inputs)
-                for time_step in xrange(self.DECODER_NUM_STEPS):
-                    if time_step > 0:
-                        tf.get_variable_scope().reuse_variables()
-                    else:
-                        '''
-                        plugin the intention state here!!!
-                        '''
-                        decoder_state = initial_decoder_state
-
-                    # attended = decoder_state
-                    # attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah, decoder_state=decoder_state)
-                    # self.e.append(e_iJ)
-                    # LSTMStateTuple
-                    decoder_output, decoder_state = self.decoder_cell(decoder_embedding_vectors[:, time_step, :], decoder_state)
-                    self.decoder_outputs.append(decoder_output)
+                self.decoder_outputs, decoder_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
+                                                                        inputs=decoder_embedding_vectors,
+                                                                        sequence_length=self.decoder_inputs_length,
+                                                                        initial_state=initial_decoder_state,
+                                                                        dtype=tf.float32
+                                                                        )
+                # for time_step in xrange(self.DECODER_NUM_STEPS):
+                #     if time_step > 0:
+                #         tf.get_variable_scope().reuse_variables()
+                #     else:
+                #         '''
+                #         plugin the intention state here!!!
+                #         '''
+                #         decoder_state = initial_decoder_state
+                #
+                #     # attended = decoder_state
+                #     # attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah, decoder_state=decoder_state)
+                #     # self.e.append(e_iJ)
+                #     # LSTMStateTuple
+                #     decoder_output, decoder_state = self.decoder_cell(decoder_embedding_vectors[:, time_step, :], decoder_state)
+                #     self.decoder_outputs.append(decoder_output)
         #     else:
         #         gen_decoder_input = tf.constant(self.EOS, shape=(1, 1), dtype=tf.int32)
         #         for time_step in xrange(self.DECODER_NUM_STEPS):
@@ -419,30 +425,27 @@ def train():
         all_loss_index = 0
         max_loss = 0.01
         mask = create_mask()
-        for stei, stdi, stl in gen:
-            if len(stei) == 0:
-                continue
-            model.optimizer.run(feed_dict={model.encoder_inputs.name: stei,\
-                                           model.decoder_inputs.name: stdi,\
-                                           model.labels_.name: stl,
-                                           model.mask.name: mask})
+        for enci, deci, lab, encil, decil in gen:
+            model.optimizer.run(feed_dict={model.encoder_inputs.name: enci,\
+                                           model.encoder_inputs_length.name: encil,\
+                                           model.decoder_inputs.name: deci,\
+                                           model.decoder_inputs_length.name: decil,\
+                                           model.labels_.name: lab})
 
             if (i + 1) % 1 == 0:
                 loss, predictions, logits, c= sess.run(
                     [model.loss, model.predictions_, model.logits_, model.labels_],
-                    feed_dict={model.encoder_inputs.name: stei, \
-                               model.decoder_inputs.name: stdi, \
-                               model.labels_.name: stl,
-                               model.mask.name: mask})
+                    feed_dict={model.encoder_inputs.name: enci, \
+                               model.encoder_inputs_length.name: encil, \
+                               model.decoder_inputs.name: deci, \
+                               model.decoder_inputs_length.name: decil, \
+                               model.labels_.name: lab})
                 all_loss_index += 1
                 # all_loss[all_loss_index % 10] = loss1
 
                 # writer.add_summary(summary, i)
-                predictions = np.reshape(np.array(predictions), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
-                stei_ = np.reshape(np.array(stei), [AttentionSortModel.batch_size, AttentionSortModel.ENCODER_NUM_STEPS])
-                stdi_ = np.reshape(np.array(stdi), [AttentionSortModel.batch_size, AttentionSortModel.DECODER_NUM_STEPS])
                 # if loss < 0.3:
-                print("step and turn-1", i, config.recover(stei_[0]), config.recover(stdi_[0]), loss, config.recover(predictions[0]), c[0])
+                print("step and turn-1", i, config.recover(enci[0]), config.recover(deci[0]), loss, config.recover(predictions[0]), c[0])
                 # ki, ke, kh, dd, ii = sess.run([model.kernel_e, model.kernel_i, model.h_, model.dd, model.modified], feed_dict={model.encoder_inputs.name: stei, \
                 #                model.decoder_inputs.name: stdi, \
                 #                model.labels_.name: stl})
@@ -456,9 +459,11 @@ def train():
                     saver.save(sess, "../../model/rnn/i_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
-                     feed_dict={model.encoder_inputs.name: stei, \
-                                model.decoder_inputs.name: stdi,
-                                model.mask.name: mask})
+                     feed_dict={model.encoder_inputs.name: enci, \
+                                model.encoder_inputs_length.name: encil, \
+                                model.decoder_inputs.name: deci, \
+                                model.decoder_inputs_length.name: decil, \
+                                model.labels_.name: lab})
             i = i + 1
             model.increment_turn()
 

@@ -106,33 +106,59 @@ class Config:
     turn_round = 0
     checkpoint = 0
     moving_checkpoint = 0
+    yield_flag = False
+    session_batch = list()
 
     def generate_batch_data(self, batch_size=32):
-        batch_encoder_inputs = list()
-        batch_decoder_inputs = list()
-        labels = list()
+        while True:
 
-        for i in xrange(batch_size):
-            session = self.sessions[self.checkpoint + i]
-            if (len(session) < self.TURN_NUM):
-                self.checkpoint += 1
-                session = self.sessions[self.checkpoint + i]
+            if self.yield_flag:
+                batch_encoder_inputs = list()
+                batch_decoder_inputs = list()
+                labels = list()
 
-            batch_encoder_inputs.append(self.translate(session[self.turn_round]))
-            target = np.array(self.translate(session[self.turn_round + 1]))
-            decoder_input = np.append(target, self.EOS)
-            label = np.append(self.GO, target)
-            batch_decoder_inputs.append(decoder_input)
-            labels.append(label)
+                batch_encoder_inputs_length = list()
+                batch_decoder_inputs_length = list()
 
-            self.moving_checkpoint = self.checkpoint + i
+                for ii in xrange(batch_size):
+                    session = self.session_batch[ii]
+                    source = self.translate(session[self.turn_round])
+                    batch_encoder_inputs.append(source)
+                    batch_encoder_inputs_length.append(len(source))
 
-        self.turn_round += 2
-        if self.turn_round == self.TURN_NUM:
-            self.turn_round = 0
-        self.checkpoint = self.moving_checkpoint
-        yield np.array(batch_encoder_inputs), np.array(batch_decoder_inputs), np.array(labels)
+                    target = np.array(self.translate(session[self.turn_round + 1]))
+                    decoder_input = np.append(target, self.EOS)
+                    batch_decoder_inputs_length.append(len(decoder_input))
 
+                    label = np.append(self.GO, target)
+                    batch_decoder_inputs.append(decoder_input)
+                    labels.append(label)
+
+                self.turn_round += 2
+
+                if self.turn_round == self.TURN_NUM:
+                    self.turn_round = 0
+                    self.yield_flag = False
+
+                yield np.array(batch_encoder_inputs), np.array(batch_decoder_inputs), np.array(labels),\
+                    np.array(batch_encoder_inputs_length), np.array(batch_decoder_inputs_length)
+            else:
+                i = 0
+                self.session_batch = list()
+                while i < batch_size:
+                    session = self.sessions[self.checkpoint + i]
+                    if (len(session) < self.TURN_NUM):
+                        self.checkpoint += 1
+                        continue
+
+                    i += 1
+                    self.session_batch.append(session)
+
+                    if (self.checkpoint + i >= len(self.sessions)):
+                        self.checkpoint = -i
+
+                self.checkpoint = self.checkpoint + i
+                self.yield_flag = True
 
     def translate(self, sentence):
         indices = list()
@@ -148,9 +174,9 @@ class Config:
         return ''.join(sentence)
 
 if __name__ == '__main__':
-    config = Config('../../data//business/business_sessions.txt')
+    config = Config('../../data/classified/business/business_sessions.txt')
     # with open('../../data/log.txt', 'w') as log_:
-    batch_size = 2
+    batch_size = 32
     for a, b, c in config.generate_batch_data(batch_size):
         for i in xrange(len(a)):
             print(config.recover(a[i]), config.recover(b[i]), config.recover(c[i]))
