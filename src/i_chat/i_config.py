@@ -53,9 +53,9 @@ class Config:
 
     TURN_NUM = 4
 
-    PAD = -1
-    EOS = -1
-    GO = -1
+    PAD = 2
+    EOS = 1
+    GO = 0
 
     PAD_ = '#PAD#'
     EOS_ = '#EOS#'
@@ -77,8 +77,8 @@ class Config:
                 lnum += 1
                 lines.append(line)
                 if not line:
-                    self.lines = []
                     self.sessions.append(lines)
+                    lines = []
                     continue
                 for cc in line:
                     # cc = cc.encode('utf-8')
@@ -88,42 +88,70 @@ class Config:
         self.chars = []
         self.dic = {}
 
-        index = 0
+        self.chars.append(self.GO)
+        self.dic[self.GO] = self.GO_
+        self.chars.append(self.EOS)
+        self.dic[self.EOS] = self.EOS_
+        self.chars.append(self.PAD)
+        self.dic[self.PAD] = self.PAD_
+
+        index = 3
         for char in set_:
             self.chars.append(char)
             self.dic[char] = index
             index = index + 1
-        self.chars.append('#GO#')
-        self.dic['#GO#'] = index
-        self.GO = index
-        index = index + 1
-        self.chars.append('#EOS#')
-        self.dic['#EOS#'] = index
-        self.EOS = index
-        index = index + 1
-        self.chars.append('#PAD#')
-        self.dic['#PAD#'] = index
-        self.PAD = index
 
         self.VOL_SIZE = len(self.chars)
 
+    turn_round = 0
+    checkpoint = 0
+    moving_checkpoint = 0
+
     def generate_batch_data(self, batch_size=32):
+        batch_encoder_inputs = list()
+        batch_decoder_inputs = list()
+        labels = list()
+
         for i in xrange(batch_size):
-            
+            session = self.sessions[self.checkpoint + i]
+            if (len(session) < self.TURN_NUM):
+                self.checkpoint += 1
+                session = self.sessions[self.checkpoint + i]
+
+            batch_encoder_inputs.append(self.translate(session[self.turn_round]))
+            target = np.array(self.translate(session[self.turn_round + 1]))
+            decoder_input = np.append(target, self.EOS)
+            label = np.append(self.GO, target)
+            batch_decoder_inputs.append(decoder_input)
+            labels.append(label)
+
+            self.moving_checkpoint = self.checkpoint + i
+
+        self.turn_round += 2
+        if self.turn_round == self.TURN_NUM:
+            self.turn_round = 0
+        self.checkpoint = self.moving_checkpoint
+        yield np.array(batch_encoder_inputs), np.array(batch_decoder_inputs), np.array(labels)
 
 
+    def translate(self, sentence):
+        indices = list()
+        for c in sentence:
+            tr = self.dic[c]
+            indices.append(tr)
+        return indices
 
     def recover(self, index):
         sentence = []
         for ii in index:
-            sentence.append(self.chars[int(ii)])
+            sentence.append(str(self.chars[int(ii)]))
         return ''.join(sentence)
 
 if __name__ == '__main__':
     config = Config('../../data//business/business_sessions.txt')
     # with open('../../data/log.txt', 'w') as log_:
-    batch_size = 32
-    for l, a, b, c in config.get_session_data():
+    batch_size = 2
+    for a, b, c in config.generate_batch_data(batch_size):
         for i in xrange(len(a)):
-            print(str(l) + config.recover(a[i]) + config.recover(b[i]) + config.recover(c[i]), len(a))
+            print(config.recover(a[i]), config.recover(b[i]), config.recover(c[i]))
         print('===========')

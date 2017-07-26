@@ -6,7 +6,7 @@ log/
 # PyCharm IDE
 .idea
 model/
-#data/
+data/classified
 # C extensions
 *.so
 
