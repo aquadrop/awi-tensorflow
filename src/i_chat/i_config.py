@@ -43,12 +43,13 @@ from tensorflow.python import debug as tf_debug
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
+
 class Config:
 
     EMBEDDING_SIZE = 128
     ENCODER_SEQ_LENGTH = 5
     ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
-    DECODER_SEQ_LENGTH = ENCODER_NUM_STEPS + 1  ## plus 1 EOS
+    DECODER_SEQ_LENGTH = ENCODER_NUM_STEPS + 1  # plus 1 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
 
     TURN_NUM = 4
@@ -109,6 +110,19 @@ class Config:
     yield_flag = False
     session_batch = list()
 
+    def padding(self, inputs):
+        batch_size = len(inputs)
+        sequence_lengths = [len(seq) for seq in inputs]
+        max_sequence_length = max(sequence_lengths)
+
+        inputs_batch_major = np.ones(
+            (batch_size, max_sequence_length), np.int32) * self.PAD
+        for i, seq in enumerate(inputs):
+            for j, element in enumerate(seq):
+                inputs_batch_major[i][j] = element
+
+        return inputs_batch_major
+
     def generate_batch_data(self, batch_size=32):
         while True:
 
@@ -126,11 +140,16 @@ class Config:
                     batch_encoder_inputs.append(source)
                     batch_encoder_inputs_length.append(len(source))
 
-                    target = np.array(self.translate(session[self.turn_round + 1]))
-                    decoder_input = np.append(target, self.EOS)
+                    # target = np.array(self.translate(
+                    #     session[self.turn_round + 1]))
+                    # decoder_input = np.append(target, self.EOS)
+                    target = self.translate(
+                        session[self.turn_round + 1])
+                    decoder_input = target + [self.EOS]
                     batch_decoder_inputs_length.append(len(decoder_input))
 
-                    label = np.append(self.GO, target)
+                    # label = np.append(self.GO, target)
+                    label = [self.GO] + target
                     batch_decoder_inputs.append(decoder_input)
                     labels.append(label)
 
@@ -140,8 +159,13 @@ class Config:
                     self.turn_round = 0
                     self.yield_flag = False
 
-                yield np.array(batch_encoder_inputs), np.array(batch_decoder_inputs), np.array(labels),\
-                    np.array(batch_encoder_inputs_length), np.array(batch_decoder_inputs_length)
+                batch_encoder_inputs = self.padding(batch_encoder_inputs)
+                batch_decoder_inputs = self.padding(batch_decoder_inputs)
+                labels = self.padding(labels)
+
+                yield batch_encoder_inputs, batch_decoder_inputs, labels,\
+                    np.array(batch_encoder_inputs_length), np.array(
+                        batch_decoder_inputs_length)
             else:
                 i = 0
                 self.session_batch = list()
@@ -177,7 +201,8 @@ if __name__ == '__main__':
     config = Config('../../data/classified/business/business_sessions.txt')
     # with open('../../data/log.txt', 'w') as log_:
     batch_size = 32
-    for a, b, c in config.generate_batch_data(batch_size):
+    for a, b, c, d, e in config.generate_batch_data(batch_size):
         for i in xrange(len(a)):
-            print(config.recover(a[i]), config.recover(b[i]), config.recover(c[i]))
+            print(config.recover(a[i]), config.recover(
+                b[i]), config.recover(c[i]))
         print('===========')
