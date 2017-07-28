@@ -18,16 +18,16 @@ class IDual:
 
     batch_size = 32
 
-    EMBEDDING_SIZE = 400
+    EMBEDDING_SIZE = 20
     ENCODER_SEQ_LENGTH = 5
     ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
     DECODER_SEQ_LENGTH =  6  ## plus 0 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
-    VOL_SIZE = 5
+    VOL_SIZE = 5 + 1
     # TURN_LENGTH = 3
 
     HIDDEN_UNIT = 256
-    N_LAYER = 10
+    N_LAYER = 3
 
     TRAINABLE = True
 
@@ -37,8 +37,9 @@ class IDual:
     Architecture: LSTM Encoder/Encoder.
     """
 
-    def __init__(self, trainable=True):
-
+    def __init__(self, data_helper=None, trainable=True):
+        if data_helper:
+            self._setup(data_helper)
         self.is_training = trainable
         self.dtype = tf.float32
 
@@ -47,12 +48,16 @@ class IDual:
         # build dual lstm graph
         self.build_graph()
 
+    def _setup(self, data_helper):
+        self.VOL_SIZE = data_helper.VOL_SIZE
+
+
     def build_graph(self):
         self._create_placeholder()
         self._inference()
-        # self._create_loss()
-        # self._create_optimizer()
-        # self._summary()
+        self._create_loss()
+        self._create_optimizer()
+        self._summary()
 
     def single_cell(self, size=128):
         if 'reuse' in inspect.getargspec(
@@ -203,7 +208,7 @@ def generate_batch_data(batch_size = 32):
         raise ValueError('length_from > length_to')
 
     vocab_lower = 1
-    vocab_upper = IDual.VOL_SIZE
+    vocab_upper = IDual.VOL_SIZE - 1
     def random_length():
         if length_from == length_to:
             return length_from
@@ -242,11 +247,13 @@ def train():
         for query_seqs, query_lens, response_seqs, response_lens in gen:
             batch = [query_seqs, query_lens, response_seqs, response_lens]
             # opts, feed_dict = step(batch=batch, model=model, is_training=True)
-            sess.run([model.embedding, feed_dict={model.query_seqs.name: batch[0], \
+            opts = [model.optOp, model.mean_loss, model.training_summaries]
+            _, loss, _ = sess.run(opts, feed_dict={model.query_seqs.name: batch[0], \
                                                            model.query_length.name: batch[1], \
                                                            model.response_seqs.name: batch[2],\
                                                            model.response_length.name: batch[3],
                                                            model.labels.name: np.eye(len(batch[0]))})
+            print(loss)
 
 def main(mode='train'):
     if mode == 'train':
