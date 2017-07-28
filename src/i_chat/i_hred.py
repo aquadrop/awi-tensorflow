@@ -276,7 +276,7 @@ class AttentionSortModel:
         #     ## update states for next batch: decoder_state, intention_state
         #     # self.decoder_state_update_op = self.get_state_update_op(self.decoder_state, decoder_state)
             self.intention_state_update_op = self.get_state_update_op(self.intention_state, intention_state)
-            self.encoder_state_update_op = self.get_state_update_op(self.encoder_state, decoder_state)
+            self.encoder_state_update_op = self.get_state_update_op(self.encoder_initial_fw_state, decoder_state)
 
             ## reset op whenever a new turn begins
             # self.reset_decoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell,

@@ -177,7 +177,7 @@ if __name__ == '__main__':
     config = Config('../../data/classified/business/business_sessions.txt')
     # with open('../../data/log.txt', 'w') as log_:
     batch_size = 32
-    for a, b, c in config.generate_batch_data(batch_size):
+    for a, b, c, d, e in config.generate_batch_data(batch_size):
         for i in xrange(len(a)):
             print(config.recover(a[i]), config.recover(b[i]), config.recover(c[i]))
         print('===========')
