@@ -87,8 +87,8 @@ def combination(session, index = 0):
     concat = []
     for sentence in session[index]:
         for branch in sub_c:
-            branch.insert(0, sentence)
-            concat.append(branch)
+            new_branch = [sentence] + branch
+            concat.append(new_branch)
     return concat
 
 
@@ -147,6 +147,7 @@ def interactive(file_, write_file_):
                         session_turn += 1
                     else:
                         session[session_turn].append(bot_line)
+            write_session(wf, session)
 
 if __name__ == '__main__':
 	# interactive('../data/interactive/整理后的客服接待语料.txt','../data/interactive/interactive-all.json')

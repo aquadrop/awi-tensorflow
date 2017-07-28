@@ -52,15 +52,15 @@ class Config:
     DECODER_SEQ_LENGTH = ENCODER_NUM_STEPS + 1  # plus 1 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
 
-    TURN_NUM = 4
+    TURN_NUM = 2
 
-    PAD = 2
-    EOS = 1
-    GO = 0
+    PAD_ = 2
+    EOS_ = 1
+    GO_ = 0
 
-    PAD_ = '#PAD#'
-    EOS_ = '#EOS#'
-    GO_ = '#GO#'
+    PAD = '#PAD#'
+    EOS = '#EOS#'
+    GO = '#GO#'
 
     def __init__(self, file_):
         print('building volcabulary...')
@@ -116,7 +116,7 @@ class Config:
         max_sequence_length = max(sequence_lengths)
 
         inputs_batch_major = np.ones(
-            (batch_size, max_sequence_length), np.int32) * self.PAD
+            (batch_size, max_sequence_length), np.int32) * self.PAD_
         for i, seq in enumerate(inputs):
             for j, element in enumerate(seq):
                 inputs_batch_major[i][j] = element
@@ -145,11 +145,11 @@ class Config:
                     # decoder_input = np.append(target, self.EOS)
                     target = self.translate(
                         session[self.turn_round + 1])
-                    decoder_input = target + [self.EOS]
+                    decoder_input = [self.GO_] + target
                     batch_decoder_inputs_length.append(len(decoder_input))
 
                     # label = np.append(self.GO, target)
-                    label = [self.GO] + target
+                    label = target + [self.EOS_]
                     batch_decoder_inputs.append(decoder_input)
                     labels.append(label)
 
@@ -194,11 +194,13 @@ class Config:
     def recover(self, index):
         sentence = []
         for ii in index:
+            if ii == self.GO_ or ii == self.PAD_:
+                continue
             sentence.append(str(self.chars[int(ii)]))
         return ''.join(sentence)
 
 if __name__ == '__main__':
-    config = Config('../../data/classified/business/business_sessions.txt')
+    config = Config('../../data/classified/interactive/interactive2017.txt')
     # with open('../../data/log.txt', 'w') as log_:
     batch_size = 32
     for a, b, c, d, e in config.generate_batch_data(batch_size):

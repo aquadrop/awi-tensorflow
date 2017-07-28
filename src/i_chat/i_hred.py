@@ -505,7 +505,7 @@ def create_mask():
 
 
 def train():
-    config = Config('../../data/classified/business/business_sessions.txt')
+    config = Config('../../data/classified/interactive/interactive2017.txt')
     # config = Config('../../data/small_poem.txt')
     model = AttentionSortModel(data_config=config, trainable=True)
     model.build_graph()
@@ -557,10 +557,10 @@ def train():
                 if loss < max_loss:
                     max_loss = loss * 0.7
                     print('saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/i_chat_hred", global_step=i)
-                if i % 1000 == 0:
+                    saver.save(sess, "../../model/rnn/i_interactive_hred", global_step=i)
+                if i % 1000 == 0 and i > 100:
                     print('safe_mode saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/i_chat_hred", global_step=i)
+                    saver.save(sess, "../../model/rnn/i_interactive_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: enci,
@@ -575,7 +575,7 @@ def train():
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
     ckpt = tf.train.get_checkpoint_state(
-        os.path.dirname("../../model/rnn/i_chat_hred"))
+        os.path.dirname("../../model/rnn/i_interactive_hred"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the ChatBot")
         saver.restore(sess, ckpt.model_checkpoint_path)
