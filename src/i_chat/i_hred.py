@@ -422,7 +422,8 @@ def create_mask():
 
 
 def train():
-    config = Config('../../data/classified/business/business_sessions.txt')
+    config = Config('../../data/classified/interactive/interactive.txt',
+                    '../../data/char_table/char2index_dict_big.txt', '../../data/char_table/index2char_dict_big.txt')
     # config = Config('../../data/small_poem.txt')
     model = AttentionSortModel(data_config=config, trainable=True)
     model.build_graph()
@@ -463,10 +464,15 @@ def train():
 
                 # writer.add_summary(summary, i)
                 # if loss < 0.3:
-                print("train_logits shape:", logits.shape)
-                print("predictions shape:", predictions.shape)
-                print("step and turn-1", i, config.recover(enci[0]), config.recover(
-                    deci[0]), loss, config.recover(predictions[0]), c[0])
+                # print("train_logits shape:", logits.shape)
+                # print("predictions shape:", predictions.shape)
+                print('---------------------------------------')
+                print("step and turn-1", i)
+                print('question:     >', config.recover(enci[0]))
+                print('answer:       >', config.recover(deci[0]))
+                print('prediction:   >', config.recover(predictions[0]))
+                print('loss:         >', loss)
+
                 # ki, ke, kh, dd, ii = sess.run([model.kernel_e, model.kernel_i, model.h_, model.dd, model.modified], feed_dict={model.encoder_inputs.name: stei, \
                 #                model.decoder_inputs.name: stdi, \
                 #                model.labels_.name: stl})
@@ -474,10 +480,12 @@ def train():
                 if loss < max_loss:
                     max_loss = loss * 0.7
                     print('saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/i_hred", global_step=i)
+                    saver.save(
+                        sess, "../../model/interactive/i_hred", global_step=i)
                 if i % 1000 == 0:
                     print('safe_mode saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/i_hred", global_step=i)
+                    saver.save(
+                        sess, "../../model/interactive/i_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: enci,
@@ -492,7 +500,7 @@ def train():
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
     ckpt = tf.train.get_checkpoint_state(
-        os.path.dirname("../../model/rnn/i_hred"))
+        os.path.dirname("../../model/interactive/i_hred"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the SortBot")
         saver.restore(sess, ckpt.model_checkpoint_path)

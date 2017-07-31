@@ -181,8 +181,8 @@ class Config:
                         batch_decoder_inputs_length)
             else:
                 i = 0
-                print('start turn_num:', len(
-                    self.sessions[self.checkpoint + i]))
+                # print('start turn_num:', len(
+                # self.sessions[self.checkpoint + i]))
                 self.TURN_NUM = len(self.sessions[self.checkpoint + i])
                 if self.TURN_NUM % 2 and self.TURN_NUM not in [7, 9, 11]:
                     self.TURN_NUM += 1
@@ -191,8 +191,10 @@ class Config:
 
                 # self.TURN_NUM = 2 if self.TURN_NUM > 4 else self.TURN_NUM
                 self.session_batch = list()
-                print('self.turn_num:', self.TURN_NUM)
+                # print('self.turn_num:', self.TURN_NUM)
                 while i < batch_size:
+                    if (self.checkpoint + i >= len(self.sessions)):
+                        self.checkpoint = -i
                     session = self.sessions[self.checkpoint + i]
 
                     if (len(session) < self.TURN_NUM):
@@ -223,14 +225,13 @@ class Config:
         return ''.join(sentence)
 
 
-
 if __name__ == '__main__':
-    config = Config('../../data/classified/business/business_sessions.txt',
+    config = Config('../../data/classified/interactive/interactive.txt',
                     '../../data/char_table/char2index_dict_small.txt', '../../data/char_table/index2char_dict_small.txt')
     # with open('../../data/log.txt', 'w') as log_:
     batch_size = 32
     for a, b, c, d, e in config.generate_batch_data(batch_size):
-        for i in xrange(len(a)):
-            print(config.recover(a[i]), config.recover(
-                b[i]), config.recover(c[i]))
+        # for i in xrange(len(a)):
+        #     print(config.recover(a[i]), config.recover(
+        #         b[i]), config.recover(c[i]))
         print('===========')
