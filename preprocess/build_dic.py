@@ -7,25 +7,27 @@ import json
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
-inpath = '../data/classified/interactive/interactive.txt'
-char2index_path = '../data/classified/interactive/char2index_dict.txt'
-index2char_path = '../data/classified/interactive/index2char_dict.txt'
+inpath = '../data/char_table/big.txt'
+char2index_path = '../data/char_table/char2index_dict_big.txt'
+index2char_path = '../data/char_table/index2char_dict_big.txt'
 
 
 def build_dict(inpath, outpath1, outpath2):
     char2index_dict = dict()
     index2char_dict = dict()
 
-    char2index_dict['GO'] = 0
-    char2index_dict['EOS'] = 1
-    char2index_dict['PAD'] = 2
+    char2index_dict['#GO#'] = 0
+    char2index_dict['#EOS#'] = 1
+    char2index_dict['#PAD#'] = 2
+    char2index_dict['#UNK#'] = 3
 
-    index2char_dict[0] = 'GO'
-    index2char_dict[1] = 'EOS'
-    index2char_dict[2] = 'PAD'
+    index2char_dict[0] = '#GO#'
+    index2char_dict[1] = '#EOS#'
+    index2char_dict[2] = '#PAD#'
+    index2char_dict[3] = '#UNK#'
 
     with open(inpath, 'r') as f:
-        index = 3
+        index = 4
         for line in f:
             line = line.decode('utf-8').strip('\n')
             unique_len = 0
