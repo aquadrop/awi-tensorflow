@@ -29,16 +29,11 @@ for special treatment for this code
 from __future__ import division
 from __future__ import print_function
 
-import argparse
-import os
-import random
-import sys
-import time
-import inspect
 
+import sys
 import numpy as np
-import tensorflow as tf
-from tensorflow.python import debug as tf_debug
+import json
+
 
 reload(sys)
 sys.setdefaultencoding("utf-8")
@@ -57,53 +52,62 @@ class Config:
     PAD_ = 2
     EOS_ = 1
     GO_ = 0
+    UNK_ = 3
 
     PAD = '#PAD#'
     EOS = '#EOS#'
     GO = '#GO#'
+    UNK = '#UNK#'
 
-    def __init__(self, file_):
-        print('building volcabulary...')
+    def __init__(self, file_, char2index_path, index2char_path):
         self.file_ = file_
-        self._build_dic(file_)
+        self.char2index_path = char2index_path
+        self.index2char_path = index2char_path
+        self.char2index_dict = dict()
+        self.index2char_dict = dict()
+        self._build_()
 
-    def _build_dic(self, file_):
-        set_ = set()
+    def _build_(self):
+        self._build_dict()
+        self._build_sessions()
+
+    def _build_dict(self):
+        print('Building dict...')
+
+        def int2str_key(dic):
+            new_dict = dict()
+            for key in dic.keys():
+                new_dict[int(key)] = dic[key]
+            return new_dict
+
+        char2index_f = open(self.char2index_path, 'r')
+        index2char_f = open(self.index2char_path, 'r')
+
+        self.char2index_dict = json.load(char2index_f)
+        index2char_dict = json.load(index2char_f)
+
+        self.index2char_dict = int2str_key(index2char_dict)
+
+        char2index_f.close()
+        index2char_f.close()
+
+        self.VOL_SIZE = len(self.index2char_dict)
+
+    def _build_sessions(self):
+        print('Building sessions...')
         lnum = 0
         self.sessions = []
         lines = []
-        with open(file_, 'r') as f:
+        with open(self.file_, 'r') as f:
             for line in f:
                 line = line.decode('utf-8').strip('\n')
                 if line:
-                    # print('line:', line)
                     lnum += 1
                     lines.append(line)
                 if not line:
                     self.sessions.append(lines)
                     lines = []
                     continue
-                for cc in line:
-                    set_.add(cc)
-
-            print('built size of ', len(set_), ' dictionary', lnum)
-        self.chars = []
-        self.dic = {}
-
-        self.chars.append(self.GO)
-        self.dic[self.GO] = self.GO_
-        self.chars.append(self.EOS)
-        self.dic[self.EOS] = self.EOS_
-        self.chars.append(self.PAD)
-        self.dic[self.PAD] = self.PAD_
-
-        index = 3
-        for char in set_:
-            self.chars.append(char)
-            self.dic[char] = index
-            index = index + 1
-
-        self.VOL_SIZE = len(self.chars)
 
     turn_round = 0
     checkpoint = 0
@@ -117,7 +121,7 @@ class Config:
         max_sequence_length = max(sequence_lengths)
 
         inputs_batch_major = np.ones(
-            (batch_size, max_sequence_length), np.int32) * self.PAD
+            (batch_size, max_sequence_length), np.int32) * self.PAD_
         for i, seq in enumerate(inputs):
             for j, element in enumerate(seq):
                 inputs_batch_major[i][j] = element
@@ -136,7 +140,9 @@ class Config:
 
                 for ii in xrange(batch_size):
                     session = self.session_batch[ii]
+
                     source = self.translate(session[self.turn_round])
+                    # print('source:', source)
                     batch_encoder_inputs.append(source)
                     batch_encoder_inputs_length.append(len(source))
 
@@ -193,18 +199,21 @@ class Config:
     def translate(self, sentence):
         indices = list()
         for c in sentence:
-            tr = self.dic[c]
+            tr = self.char2index_dict.get(c, 3)
             indices.append(tr)
         return indices
 
     def recover(self, index):
         sentence = []
         for ii in index:
-            sentence.append(str(self.chars[int(ii)]))
+            char = self.index2char_dict.get(ii)
+            # print(char)
+            sentence.append(char)
         return ''.join(sentence)
 
 if __name__ == '__main__':
-    config = Config('../../data/classified/business/business_sessions.txt')
+    config = Config('../../data/classified/business/business_sessions.txt',
+                    '../../data/char_table/char2index_dict_small.txt', '../../data/char_table/index2char_dict_small.txt')
     batch_size = 32
     for a, b, c, d, e in config.generate_batch_data(batch_size):
         for i in xrange(len(a)):
