@@ -35,6 +35,18 @@ import numpy as np
 import json
 
 
+import argparse
+import os
+import random
+import sys
+import time
+import inspect
+
+import numpy as np
+import tensorflow as tf
+from tensorflow.python import debug as tf_debug
+
+
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
@@ -95,15 +107,12 @@ class Config:
 
     def _build_sessions(self):
         print('Building sessions...')
-        lnum = 0
         self.sessions = []
         lines = []
         with open(self.file_, 'r') as f:
             for line in f:
                 line = line.decode('utf-8').strip('\n')
-                if line:
-                    lnum += 1
-                    lines.append(line)
+                lines.append(line)
                 if not line:
                     self.sessions.append(lines)
                     lines = []
@@ -130,6 +139,7 @@ class Config:
 
     def generate_batch_data(self, batch_size=32):
         while True:
+
             if self.yield_flag:
                 batch_encoder_inputs = list()
                 batch_decoder_inputs = list()
@@ -152,6 +162,7 @@ class Config:
                     batch_decoder_inputs_length.append(len(decoder_input))
 
                     label = target + [self.EOS_]
+
                     batch_decoder_inputs.append(decoder_input)
                     labels.append(label)
 
@@ -211,9 +222,12 @@ class Config:
             sentence.append(char)
         return ''.join(sentence)
 
+
+
 if __name__ == '__main__':
     config = Config('../../data/classified/business/business_sessions.txt',
                     '../../data/char_table/char2index_dict_small.txt', '../../data/char_table/index2char_dict_small.txt')
+    # with open('../../data/log.txt', 'w') as log_:
     batch_size = 32
     for a, b, c, d, e in config.generate_batch_data(batch_size):
         for i in xrange(len(a)):
