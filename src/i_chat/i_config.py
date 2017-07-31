@@ -43,23 +43,24 @@ from tensorflow.python import debug as tf_debug
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
+
 class Config:
 
     EMBEDDING_SIZE = 128
     ENCODER_SEQ_LENGTH = 5
     ENCODER_NUM_STEPS = ENCODER_SEQ_LENGTH
-    DECODER_SEQ_LENGTH = ENCODER_NUM_STEPS + 1  ## plus 1 EOS
+    DECODER_SEQ_LENGTH = ENCODER_NUM_STEPS + 1  # plus 1 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
 
-    TURN_NUM = 4
+    TURN_NUM = 0
 
-    PAD = 2
-    EOS = 1
-    GO = 0
+    PAD_ = 2
+    EOS_ = 1
+    GO_ = 0
 
-    PAD_ = '#PAD#'
-    EOS_ = '#EOS#'
-    GO_ = '#GO#'
+    PAD = '#PAD#'
+    EOS = '#EOS#'
+    GO = '#GO#'
 
     def __init__(self, file_):
         print('building volcabulary...')
@@ -74,14 +75,15 @@ class Config:
         with open(file_, 'r') as f:
             for line in f:
                 line = line.decode('utf-8').strip('\n')
-                lnum += 1
-                lines.append(line)
+                if line:
+                    # print('line:', line)
+                    lnum += 1
+                    lines.append(line)
                 if not line:
                     self.sessions.append(lines)
                     lines = []
                     continue
                 for cc in line:
-                    # cc = cc.encode('utf-8')
                     set_.add(cc)
 
             print('built size of ', len(set_), ' dictionary', lnum)
@@ -109,9 +111,21 @@ class Config:
     yield_flag = False
     session_batch = list()
 
+    def padding(self, inputs):
+        batch_size = len(inputs)
+        sequence_lengths = [len(seq) for seq in inputs]
+        max_sequence_length = max(sequence_lengths)
+
+        inputs_batch_major = np.ones(
+            (batch_size, max_sequence_length), np.int32) * self.PAD
+        for i, seq in enumerate(inputs):
+            for j, element in enumerate(seq):
+                inputs_batch_major[i][j] = element
+
+        return inputs_batch_major
+
     def generate_batch_data(self, batch_size=32):
         while True:
-
             if self.yield_flag:
                 batch_encoder_inputs = list()
                 batch_decoder_inputs = list()
@@ -126,11 +140,12 @@ class Config:
                     batch_encoder_inputs.append(source)
                     batch_encoder_inputs_length.append(len(source))
 
-                    target = np.array(self.translate(session[self.turn_round + 1]))
-                    decoder_input = np.append(target, self.EOS)
+                    target = self.translate(
+                        session[self.turn_round + 1])
+                    decoder_input = [self.GO_] + target
                     batch_decoder_inputs_length.append(len(decoder_input))
 
-                    label = np.append(self.GO, target)
+                    label = target + [self.EOS_]
                     batch_decoder_inputs.append(decoder_input)
                     labels.append(label)
 
@@ -140,17 +155,32 @@ class Config:
                     self.turn_round = 0
                     self.yield_flag = False
 
-                yield np.array(batch_encoder_inputs), np.array(batch_decoder_inputs), np.array(labels),\
-                    np.array(batch_encoder_inputs_length), np.array(batch_decoder_inputs_length)
+                batch_encoder_inputs = self.padding(batch_encoder_inputs)
+                batch_decoder_inputs = self.padding(batch_decoder_inputs)
+                labels = self.padding(labels)
+
+                yield batch_encoder_inputs, batch_decoder_inputs, labels,\
+                    np.array(batch_encoder_inputs_length), np.array(
+                        batch_decoder_inputs_length)
             else:
                 i = 0
+                print('start turn_num:', len(
+                    self.sessions[self.checkpoint + i]))
+                self.TURN_NUM = len(self.sessions[self.checkpoint + i])
+                if self.TURN_NUM % 2 and self.TURN_NUM not in [7, 9, 11]:
+                    self.TURN_NUM += 1
+                elif self.TURN_NUM % 2 and self.TURN_NUM in [7, 9, 11]:
+                    self.TURN_NUM = 4
+
+                # self.TURN_NUM = 2 if self.TURN_NUM > 4 else self.TURN_NUM
                 self.session_batch = list()
+                print('self.turn_num:', self.TURN_NUM)
                 while i < batch_size:
                     session = self.sessions[self.checkpoint + i]
+
                     if (len(session) < self.TURN_NUM):
                         self.checkpoint += 1
                         continue
-
                     i += 1
                     self.session_batch.append(session)
 
@@ -175,9 +205,9 @@ class Config:
 
 if __name__ == '__main__':
     config = Config('../../data/classified/business/business_sessions.txt')
-    # with open('../../data/log.txt', 'w') as log_:
     batch_size = 32
-    for a, b, c in config.generate_batch_data(batch_size):
+    for a, b, c, d, e in config.generate_batch_data(batch_size):
         for i in xrange(len(a)):
-            print(config.recover(a[i]), config.recover(b[i]), config.recover(c[i]))
+            print(config.recover(a[i]), config.recover(
+                b[i]), config.recover(c[i]))
         print('===========')
