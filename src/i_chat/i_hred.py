@@ -473,42 +473,6 @@ class AttentionSortModel:
             masks)
         self.predictions_ = tf.argmax(self.training_logits_, axis=2)
 
-        # ***********************mark*************************
-        # self.loss = tf.get_variable('loss', dtype=tf.float32, trainable=False,shape=[1])
-        # self.logits_ = []
-        # loss = 0
-        # logits = []
-        # # batch_size, decoder_num_steps, _ = tf.unstack(
-        # #     tf.shape(self.decoder_outputs))
-
-        # for time_step in xrange(self.DECODER_NUM_STEPS):
-        #     decoder_output = self.decoder_outputs[:, time_step, :]
-        #     # print("decoder_output:", decoder_output.shape)
-        #     logits_series = tf.matmul(
-        #         decoder_output, self.softmax_w) + self.softmax_b  # Broadcasted addition
-        #     self.logits_.append(tf.nn.softmax(logits_series))
-        #     logits.append(logits_series)
-        #     y_ = self.labels_[:, time_step]
-        #     cross_entropy = tf.reduce_mean(
-        #         tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
-        #     loss = loss + cross_entropy
-        # ***********************mark end*************************
-
-        # self.loss = loss
-        # # print(tf.stack(self.logits_).shape)
-        # self.logits_ = tf.transpose(tf.stack(self.logits_), [1, 0, 2])
-        # print(self.logits_.shape)
-        # lg = tf.unstack(self.logits_, axis=0)
-        # print("lg:", len(lg))
-        # print("lg:", lg[0].shape)
-        # # self.loss = tf.contrib.seq2seq.sequence_loss(logits_, self.labels_, self.mask)
-        # # ## reset loss op
-        # # self.reset_loss_op = tf.assign(self.loss, [0])
-        # # self.plus_loss_op = tf.add(self.loss, [loss])
-        # # tf.summary.scalar("batch_loss", self.loss)
-        # self.predictions_ = [tf.argmax(logit, axis=1) for logit in lg]
-        # print('self.predictions_:', len(self.predictions_))
-
     def _create_optimizer(self):
         self.optimizer = tf.train.AdamOptimizer(1e-4).minimize(self.loss)
 
@@ -569,7 +533,9 @@ def create_mask():
 
 
 def train():
-    config = Config('../../data/classified/interactive/small')
+    config = Config('../../data/supermarket/sm_sessions.txt',
+                    '../../data/char_table/char2index_dict_big.txt', '../../data/char_table/index2char_dict_big.txt')
+
     # config = Config('../../data/small_poem.txt')
     model = AttentionSortModel(data_config=config, trainable=True)
     model.build_graph()
@@ -610,10 +576,15 @@ def train():
 
                 # writer.add_summary(summary, i)
                 # if loss < 0.3:
-                print("train_logits shape:", logits.shape)
-                print("predictions shape:", predictions.shape)
-                print("step and turn-1", i, config.recover(enci[0]), config.recover(
-                    deci[0]), loss, config.recover(predictions[0]), c[0])
+                # print("train_logits shape:", logits.shape)
+                # print("predictions shape:", predictions.shape)
+                print('---------------------------------------')
+                print("step and turn-1", i)
+                print('question:     >', config.recover(enci[0]))
+                print('answer:       >', config.recover(deci[0]))
+                print('prediction:   >', config.recover(predictions[0]))
+                print('loss:         >', loss)
+
                 # ki, ke, kh, dd, ii = sess.run([model.kernel_e, model.kernel_i, model.h_, model.dd, model.modified], feed_dict={model.encoder_inputs.name: stei, \
                 #                model.decoder_inputs.name: stdi, \
                 #                model.labels_.name: stl})
@@ -621,10 +592,12 @@ def train():
                 if loss < max_loss:
                     max_loss = loss * 0.7
                     print('saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/chat/i_all_hred", global_step=i)
+                    saver.save(
+                        sess, "../../model/supermarket/i_hred", global_step=i)
                 if i % 1000 == 0 and i > 100:
                     print('safe_mode saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/chat/i_all_hred", global_step=i)
+                    saver.save(
+                        sess, "../../model/supermarket/i_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: enci,
@@ -645,7 +618,7 @@ def online_validate():
         sess.run(tf.global_variables_initializer())
         _check_restore_parameters(sess, saver)
         while True:
-            line = u'旺宝你在干什么?'
+            line = _get_user_input()
             translation = config.translate(line.strip('\n').decode('utf-8'))
             translation = [config.GO_] + translation
             encoder_input = np.tile([translation], (AttentionSortModel.batch_size, 1))
@@ -659,12 +632,14 @@ def online_validate():
             # scores = np.transpose(scores[0])[0:3]
             resp = config.recover(predictions[0].values).decode('utf-8')
             print(str(resp).decode('utf-8'), probs[0])
-            break
+            sess.run([model.intention_state_update_op, model.encoder_state_update_op],
+                     feed_dict={model.encoder_inputs.name: encoder_input,
+                                model.encoder_inputs_length.name: encoder_lengths})
 
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
     ckpt = tf.train.get_checkpoint_state(
-        os.path.dirname("../../model/rnn/chat/i_all_hred"))
+        os.path.dirname("../../model/supermarket/i_hred"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the ChatBot")
         saver.restore(sess, ckpt.model_checkpoint_path)
