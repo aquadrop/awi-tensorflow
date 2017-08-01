@@ -224,17 +224,33 @@ class Config:
                 continue
             if ii == self.EOS_:
                 break
-            sentence.append(str(self.chars[int(ii)]))
+            char = self.index2char_dict.get(ii)
+            sentence.append(str(char))
         return ''.join(sentence)
 
 
 if __name__ == '__main__':
     config = Config('../../data/classified/interactive/interactive.txt',
                     '../../data/char_table/char2index_dict_small.txt', '../../data/char_table/index2char_dict_small.txt')
+
+    ## validate
+    char2index = config.char2index_dict
+    print(char2index)
+    file = '../../data/classified/supermarket/sm_sessions.txt'
+    set_ = set()
+    with open(file, 'r') as f:
+        for line in f:
+            line = line.decode('utf-8').strip('\n')
+            if line:
+                for c in line:
+                    if c not in char2index:
+                        set_.add(c)
+    for c in set_:
+        print(c)
     # with open('../../data/log.txt', 'w') as log_:
-    batch_size = 1
-    for a, b, c, d, e in config.generate_batch_data(batch_size):
-        for i in xrange(len(a)):
-            print(config.recover(a[i]), config.recover(
-                b[i]), config.recover(c[i]))
-        print('===========')
+    # batch_size = 1
+    # for a, b, c, d, e in config.generate_batch_data(batch_size):
+    #     for i in xrange(len(a)):
+    #         print(config.recover(a[i]), config.recover(
+    #             b[i]), config.recover(c[i]))
+    #     print('===========')

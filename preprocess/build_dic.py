@@ -7,9 +7,13 @@ import json
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
-inpath = '../data/char_table/big.txt'
-char2index_path = '../data/char_table/char2index_dict_big.txt'
-index2char_path = '../data/char_table/index2char_dict_big.txt'
+# inpath = '../data/char_table/big.txt'
+# char2index_path = '../data/char_table/char2index_dict_big.txt'
+# index2char_path = '../data/char_table/index2char_dict_big.txt'
+
+inpath = '../data/char_table/small.txt'
+char2index_path = '../data/char_table/char2index_dict_small.txt'
+index2char_path = '../data/char_table/index2char_dict_small.txt'
 
 
 def build_dict(inpath, outpath1, outpath2):

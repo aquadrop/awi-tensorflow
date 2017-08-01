@@ -658,8 +658,8 @@ if __name__ == "__main__":
     # for a,b,c in gen:
     #     print(a,b,c)
 
-    # train()
-    online_validate()
+    train()
+    # online_validate()
     # a = np.random.rand(2,2)
     # x = tf.placeholder(tf.float32, shape=(2, 2))
     # y = tf.matmul(x, x)
