@@ -422,7 +422,7 @@ def create_mask():
 
 
 def train():
-    config = Config('../../data/classified/interactive/interactive.txt',
+    config = Config('../../data/supermarket/sm_sessions.txt',
                     '../../data/char_table/char2index_dict_big.txt', '../../data/char_table/index2char_dict_big.txt')
     # config = Config('../../data/small_poem.txt')
     model = AttentionSortModel(data_config=config, trainable=True)
@@ -481,11 +481,11 @@ def train():
                     max_loss = loss * 0.7
                     print('saving model...', i, loss)
                     saver.save(
-                        sess, "../../model/interactive/i_hred", global_step=i)
+                        sess, "../../model/supermarket/i_hred", global_step=i)
                 if i % 1000 == 0:
                     print('safe_mode saving model...', i, loss)
                     saver.save(
-                        sess, "../../model/interactive/i_hred", global_step=i)
+                        sess, "../../model/supermarket/i_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: enci,
@@ -500,7 +500,7 @@ def train():
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
     ckpt = tf.train.get_checkpoint_state(
-        os.path.dirname("../../model/interactive/i_hred"))
+        os.path.dirname("../../model/supermarket/i_hred"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the SortBot")
         saver.restore(sess, ckpt.model_checkpoint_path)

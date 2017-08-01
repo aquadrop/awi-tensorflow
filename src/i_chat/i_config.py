@@ -112,7 +112,8 @@ class Config:
         with open(self.file_, 'r') as f:
             for line in f:
                 line = line.decode('utf-8').strip('\n')
-                lines.append(line)
+                if line:
+                    lines.append(line)
                 if not line:
                     self.sessions.append(lines)
                     lines = []
@@ -231,7 +232,7 @@ if __name__ == '__main__':
     # with open('../../data/log.txt', 'w') as log_:
     batch_size = 32
     for a, b, c, d, e in config.generate_batch_data(batch_size):
-        # for i in xrange(len(a)):
-        #     print(config.recover(a[i]), config.recover(
-        #         b[i]), config.recover(c[i]))
+        for i in xrange(len(a)):
+            print(config.recover(a[i]), config.recover(
+                b[i]), config.recover(c[i]))
         print('===========')
