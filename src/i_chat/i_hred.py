@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """ A neural chatbot using sequence to sequence model with
 attentional decoder.
 
@@ -43,12 +46,15 @@ from tensorflow.python.layers.core import Dense
 
 from i_config import Config
 
+reload(sys)
+sys.setdefaultencoding("utf-8")
+
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 
 class AttentionSortModel:
 
-    batch_size = 32
+    batch_size = 4
 
     EMBEDDING_SIZE = 400
     ENCODER_SEQ_LENGTH = 5
@@ -56,6 +62,8 @@ class AttentionSortModel:
     DECODER_SEQ_LENGTH = 6  # plus 0 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
     # TURN_LENGTH = 3
+
+    PREDICTION_STATE_DECODER_MAX_TIMESTEP = 25
 
     HIDDEN_UNIT = 256
     N_LAYER = 10
@@ -74,7 +82,11 @@ class AttentionSortModel:
         if trainable:
             self.mode = tf.contrib.learn.ModeKeys.TRAIN
         else:
+            # self.batch_size = 1
             self.mode = tf.contrib.learn.ModeKeys.INFER
+
+        self.beam_width = 2
+        self.paths = 2
 
     def reset_turn(self):
         self.turn_index = 0
@@ -236,6 +248,7 @@ class AttentionSortModel:
             initial_decoder_state.append(tf.contrib.rnn.LSTMStateTuple(c, Dh))
         # print(len(initial_decoder_state))
         initial_decoder_state = tuple(initial_decoder_state)
+        print(initial_decoder_state)
         # #     intention_states.append(intention_hidden_state)
         #     intention_state = self.intention_state
         #     for encoder_step_hidden_state in hidden_states:
@@ -304,6 +317,56 @@ class AttentionSortModel:
                     self.intention_state, intention_state)
                 self.encoder_state_update_op = self.get_state_update_op(
                     self.encoder_initial_fw_state, decoder_state)
+
+            else:
+                # https://github.com/tensorflow/tensorflow/issues/11598
+                # PREDICTING_DECODER  ## METHOD 1
+                output_layer = Dense(self.VOL_SIZE,
+                                     kernel_initializer=tf.truncated_normal_initializer(mean=0.0, stddev=0.1))
+                greedy_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embedding=self.embedding,\
+                                start_tokens = tf.tile(tf.constant([self.data_config.GO_], dtype=tf.int32), [self.batch_size]),\
+                                end_token = self.data_config.EOS_)
+                infer_decoder = tf.contrib.seq2seq.BasicDecoder(cell=self.decoder_cell,
+                                                                   helper=greedy_helper,
+                                                                   initial_state=initial_decoder_state,
+                                                             output_layer=output_layer)
+                self.decoder_output, decoder_state, final_sequence_lengths = tf.contrib.seq2seq.dynamic_decode(infer_decoder,
+                                                                                          impute_finished=True,
+                                                                                          maximum_iterations=100)
+                logits = tf.identity(self.decoder_output.rnn_output, 'logits')
+                # self.predictions_ = tf.argmax(logits, axis=2)
+                time_major = tf.transpose(logits, [1, 0, 2])
+                print(time_major)
+                (self.predictions_, self.log_probabilities) = tf.nn.ctc_beam_search_decoder(inputs=time_major, \
+                                                                             sequence_length=final_sequence_lengths,\
+                                                                             beam_width=self.beam_width,
+                                                                             top_paths=self.paths,
+                                                                             merge_repeated=True)
+
+                # PREDICTING_DECODER// METHOD2
+                # tiled_initial_decoder_state = tuple([tf.nn.rnn_cell.LSTMStateTuple(
+                #     tf.contrib.seq2seq.tile_batch(ids[0], multiplier=self.beam_width),\
+                #     tf.contrib.seq2seq.tile_batch(ids[1], multiplier=self.beam_width))
+                #     for ids in initial_decoder_state])
+                #
+                # predicting_decoder = tf.contrib.seq2seq.BeamSearchDecoder(
+                #     cell=self.decoder_cell,
+                #     embedding=self.embedding,
+                #     start_tokens=tf.tile(tf.constant([self.data_config.GO_], dtype=tf.int32), [self.batch_size]),
+                #     end_token=self.data_config.EOS_,
+                #     initial_state=tiled_initial_decoder_state,
+                #     beam_width=self.beam_width,
+                #     output_layer=output_layer,
+                #     length_penalty_weight=0.0)
+                # self.decoder_output, decoder_state, final_sequence_lengths = tf.contrib.seq2seq.dynamic_decode(
+                #     decoder=predicting_decoder,
+                #     impute_finished=False,
+                #     maximum_iterations=2 * 25)
+                # print(self.decoder_output)
+                # self.predictions_ = self.decoder_output.predicted_ids
+                # self.scores = self.decoder_output.beam_search_decoder_output.scores
+
+
 
         # print("self.decoder_outputs:", self.decoder_outputs.shape)
         # for time_step in xrange(self.DECODER_NUM_STEPS):
@@ -493,8 +556,9 @@ class AttentionSortModel:
     def build_graph(self):
         self._create_placeholder()
         self._inference()
-        self._create_loss()
-        self._create_optimizer()
+        if self.TRAINABLE:
+            self._create_loss()
+            self._create_optimizer()
         self._summary()
 
 
@@ -505,7 +569,7 @@ def create_mask():
 
 
 def train():
-    config = Config('../../data/classified/interactive/interactive2017.txt')
+    config = Config('../../data/classified/interactive/small')
     # config = Config('../../data/small_poem.txt')
     model = AttentionSortModel(data_config=config, trainable=True)
     model.build_graph()
@@ -520,7 +584,7 @@ def train():
         i = 0
         all_loss = np.ones(10)
         all_loss_index = 0
-        max_loss = 0.01
+        max_loss = 0.5
         mask = create_mask()
         for enci, deci, lab, encil, decil in gen:
             # print(enci)
@@ -557,10 +621,10 @@ def train():
                 if loss < max_loss:
                     max_loss = loss * 0.7
                     print('saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/i_interactive_hred", global_step=i)
+                    saver.save(sess, "../../model/rnn/chat/i_all_hred", global_step=i)
                 if i % 1000 == 0 and i > 100:
                     print('safe_mode saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/i_interactive_hred", global_step=i)
+                    saver.save(sess, "../../model/rnn/chat/i_all_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: enci,
@@ -571,11 +635,36 @@ def train():
             i = i + 1
             model.increment_turn()
 
+def online_validate():
+    config = Config('../../data/classified/interactive/small')
+    # config = Config('../../data/small_poem.txt')
+    model = AttentionSortModel(data_config=config, trainable=False)
+    model.build_graph()
+    saver = tf.train.Saver()
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        _check_restore_parameters(sess, saver)
+        while True:
+            line = u'旺宝你在干什么?'
+            translation = config.translate(line.strip('\n').decode('utf-8'))
+            translation = [config.GO_] + translation
+            encoder_input = np.tile([translation], (AttentionSortModel.batch_size, 1))
+            encoder_lengths = np.array([len(o) for o in encoder_input])
+            [predictions, probs] = sess.run([model.predictions_, model.log_probabilities], feed_dict={model.encoder_inputs.name: encoder_input,\
+                                                                       model.encoder_inputs_length.name: encoder_lengths})
+            # [decoded, log_probabilities] = sess.run([model.decoded, model.log_probabilities], feed_dict={model.encoder_inputs.name: encoder_input,\
+            #                                                            model.encoder_inputs_length.name: encoder_lengths})
+
+            # predictions = np.transpose(predictions[0])[0]
+            # scores = np.transpose(scores[0])[0:3]
+            resp = config.recover(predictions[0].values).decode('utf-8')
+            print(str(resp).decode('utf-8'), probs[0])
+            break
 
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
     ckpt = tf.train.get_checkpoint_state(
-        os.path.dirname("../../model/rnn/i_interactive_hred"))
+        os.path.dirname("../../model/rnn/chat/i_all_hred"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the ChatBot")
         saver.restore(sess, ckpt.model_checkpoint_path)
@@ -594,8 +683,8 @@ if __name__ == "__main__":
     # for a,b,c in gen:
     #     print(a,b,c)
 
-    train()
-    # run_sort()
+    # train()
+    online_validate()
     # a = np.random.rand(2,2)
     # x = tf.placeholder(tf.float32, shape=(2, 2))
     # y = tf.matmul(x, x)

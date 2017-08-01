@@ -85,6 +85,8 @@ class Config:
                     # cc = cc.encode('utf-8')
                     set_.add(cc)
 
+            if len(lines) > 0:
+                self.sessions.append(lines)
             print('built size of ', len(set_), ' dictionary', lnum)
         self.chars = []
         self.dic = {}
@@ -194,15 +196,17 @@ class Config:
     def recover(self, index):
         sentence = []
         for ii in index:
-            if ii == self.GO_ or ii == self.PAD_:
+            if ii == self.GO_ or ii == self.PAD_ or ii == -1:
                 continue
+            if ii == self.EOS_:
+                break
             sentence.append(str(self.chars[int(ii)]))
         return ''.join(sentence)
 
 if __name__ == '__main__':
-    config = Config('../../data/classified/interactive/interactive2017.txt')
+    config = Config('../../data/classified/interactive/small')
     # with open('../../data/log.txt', 'w') as log_:
-    batch_size = 32
+    batch_size = 1
     for a, b, c, d, e in config.generate_batch_data(batch_size):
         for i in xrange(len(a)):
             print(config.recover(a[i]), config.recover(
