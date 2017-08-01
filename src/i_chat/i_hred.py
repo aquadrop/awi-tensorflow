@@ -305,53 +305,6 @@ class AttentionSortModel:
                 self.encoder_state_update_op = self.get_state_update_op(
                     self.encoder_initial_fw_state, decoder_state)
 
-        # print("self.decoder_outputs:", self.decoder_outputs.shape)
-        # for time_step in xrange(self.DECODER_NUM_STEPS):
-        #     if time_step > 0:
-        #         tf.get_variable_scope().reuse_variables()
-        #     else:
-        #         '''
-        #         plugin the intention state here!!!
-        #         '''
-        #         decoder_state = initial_decoder_state
-        #
-        #     # attended = decoder_state
-        #     # attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah, decoder_state=decoder_state)
-        #     # self.e.append(e_iJ)
-        #     # LSTMStateTuple
-        #     decoder_output, decoder_state = self.decoder_cell(decoder_embedding_vectors[:, time_step, :], decoder_state)
-        #     self.decoder_outputs.append(decoder_output)
-        #     else:
-        #         gen_decoder_input = tf.constant(self.EOS, shape=(1, 1), dtype=tf.int32)
-        #         for time_step in xrange(self.DECODER_NUM_STEPS):
-        #             if time_step > 0:
-        #                 tf.get_variable_scope().reuse_variables()
-        #             else:
-        #                 decoder_state = self.decoder_state
-        #
-        #             # attended = self._attention(encoder_hidden_states=hidden_states, u_encoder_hidden_states=U_ah,
-        #             #                            decoder_state=decoder_state)
-        #             gen_decoder_input_vector = tf.nn.embedding_lookup(self.embedding, gen_decoder_input)
-        #             decoder_output, decoder_state = self.decoder_cell(gen_decoder_input_vector[:,0,:], decoder_state)
-        #             index = self._neural_decoder_output_index(decoder_output)
-        #             gen_decoder_input = tf.reshape(index,[-1, 1])
-        #             self.decoder_outputs.append(decoder_output)
-        #             self.internal.append(gen_decoder_input)
-        #
-        #     ## update states for next batch: decoder_state, intention_state
-        #     # self.decoder_state_update_op = self.get_state_update_op(self.decoder_state, decoder_state)
-
-        # reset op whenever a new turn begins
-        # self.reset_decoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell,
-        #                                                       self.batch_size)
-        # self.reset_encoder_state_op = self.get_state_reset_op(self.decoder_state, self.decoder_cell,
-        #                                                       self.batch_size)
-        # self.reset_intention_state_op = self.get_state_reset_op(self.intention_state, self.intention_cell,
-        #                                                         self.batch_size)
-        # logits_series = tf.matmul(decoder_output, softmax_w) + softmax_b  # Broadcasted addition
-        # # logits_series = tf.nn.softmax(logits_series, dim=1)
-        # y_ = labels_[:, time_step, :]
-
     def _attention(self, encoder_hidden_states, u_encoder_hidden_states, decoder_state):
         target_hidden_state = self._build_hidden(decoder_state)
         # attention
@@ -409,42 +362,6 @@ class AttentionSortModel:
             self.labels_,
             masks)
         self.predictions_ = tf.argmax(self.training_logits_, axis=2)
-
-        # ***********************mark*************************
-        # self.loss = tf.get_variable('loss', dtype=tf.float32, trainable=False,shape=[1])
-        # self.logits_ = []
-        # loss = 0
-        # logits = []
-        # # batch_size, decoder_num_steps, _ = tf.unstack(
-        # #     tf.shape(self.decoder_outputs))
-
-        # for time_step in xrange(self.DECODER_NUM_STEPS):
-        #     decoder_output = self.decoder_outputs[:, time_step, :]
-        #     # print("decoder_output:", decoder_output.shape)
-        #     logits_series = tf.matmul(
-        #         decoder_output, self.softmax_w) + self.softmax_b  # Broadcasted addition
-        #     self.logits_.append(tf.nn.softmax(logits_series))
-        #     logits.append(logits_series)
-        #     y_ = self.labels_[:, time_step]
-        #     cross_entropy = tf.reduce_mean(
-        #         tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=logits_series))
-        #     loss = loss + cross_entropy
-        # ***********************mark end*************************
-
-        # self.loss = loss
-        # # print(tf.stack(self.logits_).shape)
-        # self.logits_ = tf.transpose(tf.stack(self.logits_), [1, 0, 2])
-        # print(self.logits_.shape)
-        # lg = tf.unstack(self.logits_, axis=0)
-        # print("lg:", len(lg))
-        # print("lg:", lg[0].shape)
-        # # self.loss = tf.contrib.seq2seq.sequence_loss(logits_, self.labels_, self.mask)
-        # # ## reset loss op
-        # # self.reset_loss_op = tf.assign(self.loss, [0])
-        # # self.plus_loss_op = tf.add(self.loss, [loss])
-        # # tf.summary.scalar("batch_loss", self.loss)
-        # self.predictions_ = [tf.argmax(logit, axis=1) for logit in lg]
-        # print('self.predictions_:', len(self.predictions_))
 
     def _create_optimizer(self):
         self.optimizer = tf.train.AdamOptimizer(1e-4).minimize(self.loss)
@@ -505,7 +422,9 @@ def create_mask():
 
 
 def train():
-    config = Config('../../data/classified/interactive/interactive2017.txt')
+    config = Config('../../data/supermarket/sm_sessions.txt',
+                    '../../data/char_table/char2index_dict_big.txt', '../../data/char_table/index2char_dict_big.txt')
+
     # config = Config('../../data/small_poem.txt')
     model = AttentionSortModel(data_config=config, trainable=True)
     model.build_graph()
@@ -546,10 +465,15 @@ def train():
 
                 # writer.add_summary(summary, i)
                 # if loss < 0.3:
-                print("train_logits shape:", logits.shape)
-                print("predictions shape:", predictions.shape)
-                print("step and turn-1", i, config.recover(enci[0]), config.recover(
-                    deci[0]), loss, config.recover(predictions[0]), c[0])
+                # print("train_logits shape:", logits.shape)
+                # print("predictions shape:", predictions.shape)
+                print('---------------------------------------')
+                print("step and turn-1", i)
+                print('question:     >', config.recover(enci[0]))
+                print('answer:       >', config.recover(deci[0]))
+                print('prediction:   >', config.recover(predictions[0]))
+                print('loss:         >', loss)
+
                 # ki, ke, kh, dd, ii = sess.run([model.kernel_e, model.kernel_i, model.h_, model.dd, model.modified], feed_dict={model.encoder_inputs.name: stei, \
                 #                model.decoder_inputs.name: stdi, \
                 #                model.labels_.name: stl})
@@ -557,10 +481,12 @@ def train():
                 if loss < max_loss:
                     max_loss = loss * 0.7
                     print('saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/i_interactive_hred", global_step=i)
-                if i % 1000 == 0 and i > 100:
+                    saver.save(
+                        sess, "../../model/supermarket/i_hred", global_step=i)
+                if i % 1000 == 0:
                     print('safe_mode saving model...', i, loss)
-                    saver.save(sess, "../../model/rnn/i_interactive_hred", global_step=i)
+                    saver.save(
+                        sess, "../../model/supermarket/i_hred", global_step=i)
 
             sess.run([model.intention_state_update_op, model.encoder_state_update_op],
                      feed_dict={model.encoder_inputs.name: enci,
@@ -575,7 +501,7 @@ def train():
 def _check_restore_parameters(sess, saver):
     """ Restore the previously trained parameters if there are any. """
     ckpt = tf.train.get_checkpoint_state(
-        os.path.dirname("../../model/rnn/i_interactive_hred"))
+        os.path.dirname("../../model/supermarket/i_hred"))
     if ckpt and ckpt.model_checkpoint_path:
         print("Loading parameters for the ChatBot")
         saver.restore(sess, ckpt.model_checkpoint_path)
