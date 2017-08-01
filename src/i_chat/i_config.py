@@ -29,6 +29,12 @@ for special treatment for this code
 from __future__ import division
 from __future__ import print_function
 
+
+import sys
+import numpy as np
+import json
+
+
 import argparse
 import os
 import random
@@ -39,6 +45,7 @@ import inspect
 import numpy as np
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
+
 
 reload(sys)
 sys.setdefaultencoding("utf-8")
@@ -52,57 +59,65 @@ class Config:
     DECODER_SEQ_LENGTH = ENCODER_NUM_STEPS + 1  # plus 1 EOS
     DECODER_NUM_STEPS = DECODER_SEQ_LENGTH
 
-    TURN_NUM = 2
+    TURN_NUM = 0
 
     PAD_ = 2
     EOS_ = 1
     GO_ = 0
+    UNK_ = 3
 
     PAD = '#PAD#'
     EOS = '#EOS#'
     GO = '#GO#'
+    UNK = '#UNK#'
 
-    def __init__(self, file_):
-        print('building volcabulary...')
+    def __init__(self, file_, char2index_path, index2char_path):
         self.file_ = file_
-        self._build_dic(file_)
+        self.char2index_path = char2index_path
+        self.index2char_path = index2char_path
+        self.char2index_dict = dict()
+        self.index2char_dict = dict()
+        self._build_()
 
-    def _build_dic(self, file_):
-        set_ = set()
-        lnum = 0
+    def _build_(self):
+        self._build_dict()
+        self._build_sessions()
+
+    def _build_dict(self):
+        print('Building dict...')
+
+        def int2str_key(dic):
+            new_dict = dict()
+            for key in dic.keys():
+                new_dict[int(key)] = dic[key]
+            return new_dict
+
+        char2index_f = open(self.char2index_path, 'r')
+        index2char_f = open(self.index2char_path, 'r')
+
+        self.char2index_dict = json.load(char2index_f)
+        index2char_dict = json.load(index2char_f)
+
+        self.index2char_dict = int2str_key(index2char_dict)
+
+        char2index_f.close()
+        index2char_f.close()
+
+        self.VOL_SIZE = len(self.index2char_dict)
+
+    def _build_sessions(self):
+        print('Building sessions...')
         self.sessions = []
         lines = []
-        with open(file_, 'r') as f:
+        with open(self.file_, 'r') as f:
             for line in f:
                 line = line.decode('utf-8').strip('\n')
-                lnum += 1
-                lines.append(line)
+                if line:
+                    lines.append(line)
                 if not line:
                     self.sessions.append(lines)
                     lines = []
                     continue
-                for cc in line:
-                    # cc = cc.encode('utf-8')
-                    set_.add(cc)
-
-            print('built size of ', len(set_), ' dictionary', lnum)
-        self.chars = []
-        self.dic = {}
-
-        self.chars.append(self.GO)
-        self.dic[self.GO] = self.GO_
-        self.chars.append(self.EOS)
-        self.dic[self.EOS] = self.EOS_
-        self.chars.append(self.PAD)
-        self.dic[self.PAD] = self.PAD_
-
-        index = 3
-        for char in set_:
-            self.chars.append(char)
-            self.dic[char] = index
-            index = index + 1
-
-        self.VOL_SIZE = len(self.chars)
 
     turn_round = 0
     checkpoint = 0
@@ -136,20 +151,19 @@ class Config:
 
                 for ii in xrange(batch_size):
                     session = self.session_batch[ii]
+
                     source = self.translate(session[self.turn_round])
+                    # print('source:', source)
                     batch_encoder_inputs.append(source)
                     batch_encoder_inputs_length.append(len(source))
 
-                    # target = np.array(self.translate(
-                    #     session[self.turn_round + 1]))
-                    # decoder_input = np.append(target, self.EOS)
                     target = self.translate(
                         session[self.turn_round + 1])
                     decoder_input = [self.GO_] + target
                     batch_decoder_inputs_length.append(len(decoder_input))
 
-                    # label = np.append(self.GO, target)
                     label = target + [self.EOS_]
+
                     batch_decoder_inputs.append(decoder_input)
                     labels.append(label)
 
@@ -168,13 +182,25 @@ class Config:
                         batch_decoder_inputs_length)
             else:
                 i = 0
+                # print('start turn_num:', len(
+                # self.sessions[self.checkpoint + i]))
+                self.TURN_NUM = len(self.sessions[self.checkpoint + i])
+                if self.TURN_NUM % 2 and self.TURN_NUM not in [7, 9, 11]:
+                    self.TURN_NUM += 1
+                elif self.TURN_NUM % 2 and self.TURN_NUM in [7, 9, 11]:
+                    self.TURN_NUM = 4
+
+                # self.TURN_NUM = 2 if self.TURN_NUM > 4 else self.TURN_NUM
                 self.session_batch = list()
+                # print('self.turn_num:', self.TURN_NUM)
                 while i < batch_size:
+                    if (self.checkpoint + i >= len(self.sessions)):
+                        self.checkpoint = -i
                     session = self.sessions[self.checkpoint + i]
+
                     if (len(session) < self.TURN_NUM):
                         self.checkpoint += 1
                         continue
-
                     i += 1
                     self.session_batch.append(session)
 
@@ -187,20 +213,22 @@ class Config:
     def translate(self, sentence):
         indices = list()
         for c in sentence:
-            tr = self.dic[c]
+            tr = self.char2index_dict.get(c, 3)
             indices.append(tr)
         return indices
 
     def recover(self, index):
         sentence = []
         for ii in index:
-            if ii == self.GO_ or ii == self.PAD_:
-                continue
-            sentence.append(str(self.chars[int(ii)]))
+            char = self.index2char_dict.get(ii)
+            # print(char)
+            sentence.append(char)
         return ''.join(sentence)
 
+
 if __name__ == '__main__':
-    config = Config('../../data/classified/interactive/interactive2017.txt')
+    config = Config('../../data/classified/interactive/interactive.txt',
+                    '../../data/char_table/char2index_dict_small.txt', '../../data/char_table/index2char_dict_small.txt')
     # with open('../../data/log.txt', 'w') as log_:
     batch_size = 32
     for a, b, c, d, e in config.generate_batch_data(batch_size):

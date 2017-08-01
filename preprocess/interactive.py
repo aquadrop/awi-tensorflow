@@ -46,7 +46,8 @@ import unicodedata
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
-topic_sign = ['一.','二.','三.','四.','五.','六.','七.']
+topic_sign = ['一.', '二.', '三.', '四.', '五.', '六.', '七.']
+
 talk_sign = r'^[0-9]+.*$'
 talk_pattern = re.compile(talk_sign)
 guest_sign = r'G:.*'
@@ -55,6 +56,7 @@ bot_sign = r'B:.*'
 bot_pattern = re.compile(bot_sign)
 
 GUEST_START = "AUTOMATA_WAKE_UP"
+
 
 def get_topic(line):
     tt = []
@@ -67,8 +69,10 @@ def get_topic(line):
             tt.append(c)
     return ''.join(tt)
 
+
 def topic_start(line):
     return '话题:' in line
+
 
 def write_session(f, session):
     combines = combination(session)
@@ -77,16 +81,20 @@ def write_session(f, session):
             f.write(s + '\n')
         f.write('\n')
 
-def combination(session, index = 0):
+
+def combination(session, index=0):
     if len(session) == 0:
         return []
     if index == len(session) - 1:
         start = [[ss] for ss in session[index]]
         return start
-    sub_c = combination(session, index= index + 1)
+
+    sub_c = combination(session, index=index + 1)
     concat = []
     for sentence in session[index]:
         for branch in sub_c:
+            # branch.insert(0, sentence)
+
             new_branch = [sentence] + branch
             concat.append(new_branch)
     return concat
@@ -99,7 +107,9 @@ def interactive(file_, write_file_):
             session_turn = 0
             for line in f:
                 line = line.strip().decode('utf-8')
-                line = unicodedata.normalize('NFKC', line).replace('\t', '').replace(' ', '')
+                line = unicodedata.normalize('NFKC', line).replace(
+                    '\t', '').replace(' ', '')
+
                 if topic_start(line):
                     continue
                 if talk_pattern.match(str(line)):
@@ -147,8 +157,8 @@ def interactive(file_, write_file_):
                         session_turn += 1
                     else:
                         session[session_turn].append(bot_line)
-            write_session(wf, session)
 
 if __name__ == '__main__':
-	# interactive('../data/interactive/整理后的客服接待语料.txt','../data/interactive/interactive-all.json')
-	interactive('../data/classified/interactive/2017互动话术汇总版4.10.txt','../data/classified/interactive/interactive2017.txt')
+        # interactive('../data/interactive/整理后的客服接待语料.txt','../data/interactive/interactive-all.json')
+    interactive('../data/classified/interactive/1.txt',
+                '../data/classified/interactive/interactive1.txt')
