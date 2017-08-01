@@ -424,6 +424,7 @@ def create_mask():
 def train():
     config = Config('../../data/supermarket/sm_sessions.txt',
                     '../../data/char_table/char2index_dict_big.txt', '../../data/char_table/index2char_dict_big.txt')
+
     # config = Config('../../data/small_poem.txt')
     model = AttentionSortModel(data_config=config, trainable=True)
     model.build_graph()
@@ -434,7 +435,7 @@ def train():
         sess.run(tf.global_variables_initializer())
         writer = tf.summary.FileWriter('../log',
                                        sess.graph)
-        # _check_restore_parameters(sess, saver)
+        _check_restore_parameters(sess, saver)
         i = 0
         all_loss = np.ones(10)
         all_loss_index = 0
@@ -502,10 +503,10 @@ def _check_restore_parameters(sess, saver):
     ckpt = tf.train.get_checkpoint_state(
         os.path.dirname("../../model/supermarket/i_hred"))
     if ckpt and ckpt.model_checkpoint_path:
-        print("Loading parameters for the SortBot")
+        print("Loading parameters for the ChatBot")
         saver.restore(sess, ckpt.model_checkpoint_path)
     else:
-        print("Initializing fresh parameters for the SortBot")
+        print("Initializing fresh parameters for the ChatBot")
 
 
 def _get_user_input():

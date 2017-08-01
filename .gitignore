@@ -6,6 +6,7 @@ log/
 # PyCharm IDE
 .idea
 model/
+src/i_chat/arch-hred-basic/
 data/classified
 # C extensions
 *.so

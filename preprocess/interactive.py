@@ -47,6 +47,7 @@ reload(sys)
 sys.setdefaultencoding("utf-8")
 
 topic_sign = ['一.', '二.', '三.', '四.', '五.', '六.', '七.']
+
 talk_sign = r'^[0-9]+.*$'
 talk_pattern = re.compile(talk_sign)
 guest_sign = r'G:.*'
@@ -87,11 +88,13 @@ def combination(session, index=0):
     if index == len(session) - 1:
         start = [[ss] for ss in session[index]]
         return start
+
     sub_c = combination(session, index=index + 1)
     concat = []
     for sentence in session[index]:
         for branch in sub_c:
             # branch.insert(0, sentence)
+
             new_branch = [sentence] + branch
             concat.append(new_branch)
     return concat
@@ -106,6 +109,7 @@ def interactive(file_, write_file_):
                 line = line.strip().decode('utf-8')
                 line = unicodedata.normalize('NFKC', line).replace(
                     '\t', '').replace(' ', '')
+
                 if topic_start(line):
                     continue
                 if talk_pattern.match(str(line)):
