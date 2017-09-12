@@ -8,6 +8,7 @@ log/
 model/
 src/i_chat/arch-hred-basic/
 data/classified
+data/huawei
 # C extensions
 *.so
 

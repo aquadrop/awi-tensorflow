@@ -8,7 +8,7 @@ reload(sys)
 sys.setdefaultencoding("utf-8")
 
 path = '../../data/classified/qa/qa2.txt'
-outpath = '../../data/classified/qa/qa.txt'
+outpath = '../../data/classified/qa/qa_small.txt'
 
 
 def f(path, outpath):
